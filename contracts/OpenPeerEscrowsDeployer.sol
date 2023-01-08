@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
-import "hardhat/console.sol";
-import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract OpenPeerEscrowsDeployer is Ownable {
+import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
+import { Ownable } from "./libs/Ownable.sol";
+import { ERC2771Context } from "./libs/ERC2771Context.sol";
+
+contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     mapping (address => bytes32) public escrows;
 
     /***********************
@@ -14,35 +15,62 @@ contract OpenPeerEscrowsDeployer is Ownable {
     address public feeRecipient;
     uint8 public fee;
 
+    bool public stopped = false;
+
     /***********************
     +   Events            +
     ***********************/
-    event EscrowCreated(address _escrow, bytes32 indexed _tradeHash);
+    event EscrowCreated(address indexed _escrow, bytes32 indexed _tradeHash);
 
     /// @notice Settings
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
     /// @param _fee OP fee (bps) ex: 30 == 0.3%
-    constructor (address _arbitrator, address _feeRecipient, uint8 _fee) {
+    /// @param _trustedForwarder Forwarder address
+    constructor (
+        address _arbitrator,
+        address _feeRecipient,
+        uint8 _fee,
+        address _trustedForwarder
+    ) ERC2771Context(_trustedForwarder) {
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
         fee = _fee;
     }
 
-    function deployNativeEscrow(address _buyer, uint256 _amount) external {
+    /***********************
+    +   Modifiers          +
+    ***********************/
+
+    // circuit breaker modifiers
+    modifier stopInEmergency {
+        if (stopped) {
+            revert("Paused");
+        } else {
+            _;
+        }
+    }
+
+    function deployNativeEscrow(address _buyer, uint256 _amount) external stopInEmergency {
         deploy(_buyer, address(0), _amount);
     }
 
-    function deployERC20Escrow(address _buyer, address _token,  uint256 _amount) external {
+    function deployERC20Escrow(address _buyer, address _token,  uint256 _amount) external stopInEmergency {
         deploy(_buyer, _token, _amount);
     }
 
     function deploy(address _buyer, address _token, uint256 _amount) private {
-        OpenPeerEscrow escrow = new OpenPeerEscrow(_buyer, _token, _amount, fee, arbitrator, feeRecipient);
+        OpenPeerEscrow escrow = new OpenPeerEscrow(_buyer,
+                                                   _token,
+                                                   _amount,
+                                                   fee,
+                                                   arbitrator,
+                                                   feeRecipient,
+                                                   _trustedForwarder);
 
         bytes32 _tradeHash = keccak256(
             abi.encodePacked(address(escrow),
-                             msg.sender,
+                             _msgSender(),
                              _buyer,
                              _token,
                              _amount,
@@ -54,7 +82,9 @@ contract OpenPeerEscrowsDeployer is Ownable {
         emit EscrowCreated(address(escrow), _tradeHash);
     }
 
-    // setters
+    /***********************
+    +   Setters           +
+    ***********************/
 
     /// @notice Updates the arbitrator
     /// @param _arbitrator Address of the arbitrator
@@ -73,4 +103,20 @@ contract OpenPeerEscrowsDeployer is Ownable {
     function setFee(uint8 _fee) public onlyOwner {
         fee = _fee;
     }
+
+    /// @notice Updates the forwarder
+    /// @param trustedForwarder biconomy forwarder
+    function setTrustedForwarder(address trustedForwarder) external onlyOwner {
+        _trustedForwarder = trustedForwarder;
+    }
+
+    /// @notice Pauses and activate the contract
+    function toggleContractActive() public onlyOwner {
+        stopped = !stopped;
+    }
+
+    /// @notice Version recipient
+    function versionRecipient() external pure returns (string memory) {
+  		  return "1.0";
+  	}
 }

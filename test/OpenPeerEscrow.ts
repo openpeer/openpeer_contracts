@@ -52,7 +52,8 @@ describe('OpenPeerEscrow', () => {
       amount,
       fee,
       arbitrator.address,
-      feeRecipient.address
+      feeRecipient.address,
+      constants.AddressZero
     );
 
     return {

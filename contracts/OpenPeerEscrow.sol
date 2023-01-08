@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
+
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ERC2771Context } from "./libs/ERC2771Context.sol";
 
-contract OpenPeerEscrow {
+contract OpenPeerEscrow is ERC2771Context {
     using SafeERC20 for IERC20;
     // Settings
     // Address of the arbitrator (currently OP staff)
@@ -25,19 +27,21 @@ contract OpenPeerEscrow {
     /// @param _fee OP fee (bps) ex: 30 == 0.3%
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
+    /// @param _trustedForwarder Forwarder address
     constructor(
         address _buyer,
         address _token,
         uint256 _amount,
         uint8 _fee,
         address _arbitrator,
-        address _feeRecipient
-    ) {
+        address _feeRecipient,
+        address _trustedForwarder
+    ) ERC2771Context(_trustedForwarder) {
         require(_amount > 0, "Invalid amount");
-        require(_buyer != msg.sender, "Seller and buyer must be different");
+        require(_buyer != _msgSender(), "Seller and buyer must be different");
         require(_buyer != address(0), "Invalid buyer");
 
-        seller = msg.sender;
+        seller = _msgSender();
         token = _token;
         buyer = _buyer;
         amount = _amount;
@@ -56,17 +60,17 @@ contract OpenPeerEscrow {
     event DisputeResolved();
 
     modifier onlySeller() {
-        require(msg.sender == seller, "Must be seller");
+        require(_msgSender() == seller, "Must be seller");
         _;
     }
 
     modifier onlyArbitrator() {
-        require(msg.sender == arbitrator, "Must be arbitrator");
+        require(_msgSender() == arbitrator, "Must be arbitrator");
         _;
     }
 
     modifier onlyBuyer() {
-        require(msg.sender == buyer, "Must be buyer");
+        require(_msgSender() == buyer, "Must be buyer");
         _;
     }
 
@@ -76,7 +80,7 @@ contract OpenPeerEscrow {
         if (token == address(0)) {
             require(msg.value == amount + fee, "Incorrect MATIC sent");
         } else {
-            IERC20(token).safeTransferFrom(msg.sender, address(this), amount + fee );
+            IERC20(token).safeTransferFrom(_msgSender(), address(this), amount + fee );
         }
 
         sellerCanCancelAfter = uint32(block.timestamp) + 24 hours;
@@ -144,7 +148,7 @@ contract OpenPeerEscrow {
 
     /// @notice Allow seller or buyer to open a dispute
     function openDispute() external {
-      require(msg.sender == seller || msg.sender == buyer, "Must be seller or buyer");
+      require(_msgSender() == seller || _msgSender() == buyer, "Must be seller or buyer");
       require(sellerCanCancelAfter > 0, "Funds not escrowed yet");
 
       dispute = true;
@@ -160,4 +164,9 @@ contract OpenPeerEscrow {
       emit DisputeResolved();
       transferEscrowAndFees(_winner, amount, fee);
     }
+
+    /// @notice Version recipient
+    function versionRecipient() external pure returns (string memory) {
+  		  return "1.0";
+  	}
 }

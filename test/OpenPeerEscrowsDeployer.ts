@@ -18,7 +18,8 @@ describe('OpenPeerEscrowsDeployer', () => {
     const contract: OpenPeerEscrowsDeployer = await OpenPeerEscrowsDeployer.deploy(
       arbitrator.address,
       feeRecipient.address,
-      fee
+      fee,
+      constants.AddressZero
     );
 
     await contract.deployed();
