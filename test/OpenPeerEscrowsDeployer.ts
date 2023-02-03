@@ -1,6 +1,5 @@
 import { expect } from 'chai';
-import { constants } from 'ethers';
-import { solidityKeccak256 } from 'ethers/lib/utils';
+import { BigNumber, constants } from 'ethers';
 import { ethers } from 'hardhat';
 
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
@@ -15,10 +14,12 @@ describe('OpenPeerEscrowsDeployer', () => {
     );
     const [owner, arbitrator, feeRecipient] = await ethers.getSigners();
     const fee = 30;
+    const sellerWaitingTime = 24 * 60 * 60; // 24 hours in seconds
     const contract: OpenPeerEscrowsDeployer = await OpenPeerEscrowsDeployer.deploy(
       arbitrator.address,
       feeRecipient.address,
       fee,
+      sellerWaitingTime,
       constants.AddressZero
     );
 
@@ -33,6 +34,7 @@ describe('OpenPeerEscrowsDeployer', () => {
     let arbitrator: SignerWithAddress;
     let feeRecipient: SignerWithAddress;
     let fee: number;
+    const sellerWaitingTime: number = 24 * 60 * 60;
 
     beforeEach(async () => {
       const {
@@ -54,6 +56,7 @@ describe('OpenPeerEscrowsDeployer', () => {
       expect(await deployer.arbitrator()).to.be.equal(arbitrator.address);
       expect(await deployer.feeRecipient()).to.be.equal(feeRecipient.address);
       expect(await deployer.fee()).to.be.equal(fee);
+      expect(await deployer.sellerWaitingTime()).to.be.equal(sellerWaitingTime);
     });
 
     describe('Settings', () => {
@@ -76,6 +79,14 @@ describe('OpenPeerEscrowsDeployer', () => {
             'Ownable: caller is not the owner'
           );
         });
+
+        it('Should revert with an already deployed order', async () => {
+          const orderID = ethers.utils.formatBytes32String('1');
+          await deployer.deployNativeEscrow(orderID, owner.address, '1000');
+          await expect(
+            deployer.deployNativeEscrow(orderID, feeRecipient.address, '1000')
+          ).to.be.revertedWith('Order already exists');
+        });
       });
 
       it('Should update the fee', async () => {
@@ -97,105 +108,64 @@ describe('OpenPeerEscrowsDeployer', () => {
       });
     });
 
-    describe('Native token', () => {
-      let newEscrowAddress: string;
-      let newEscrowHash: string;
+    describe('Deploy', () => {
+      const buyer = '0xad0637645341A160c4621a5AE22A709fECA37234';
+      const orderID = ethers.utils.formatBytes32String('1');
 
-      beforeEach(() => {
-        newEscrowAddress = '0xfaC68Fded9F4345dBA71B1509Cd02DF2E4f2d207';
-        newEscrowHash = solidityKeccak256(
-          [
-            'address',
-            'address',
-            'address',
-            'address',
-            'uint256',
-            'uint8',
-            'address',
-            'address'
-          ],
-          [
-            newEscrowAddress,
-            owner.address,
-            '0xad0637645341a160c4621a5ae22a709feca37234',
-            constants.AddressZero,
-            '1000',
-            '30',
-            arbitrator.address,
-            feeRecipient.address
-          ]
-        );
+      describe('Native token', () => {
+        it('Should emit a EscrowCreated event', async () => {
+          await expect(deployer.deployNativeEscrow(orderID, buyer, '1000'))
+            .to.emit(deployer, 'EscrowCreated')
+            .withArgs(
+              orderID,
+              ([exists, _, sellerAddress, buyerAddress, token, amount]: any) =>
+                exists &&
+                sellerAddress === owner.address &&
+                buyerAddress === buyer &&
+                token === constants.AddressZero &&
+                BigNumber.from('1000').eq(amount)
+            );
+        });
+
+        it('Should be available in the escrows list', async () => {
+          await deployer.deployNativeEscrow(orderID, buyer, '1000');
+          const [exists, _, sellerAddress, buyerAddress, token, amount] =
+            await deployer.escrows(orderID);
+          expect(exists).to.be.true;
+          expect(sellerAddress).to.be.eq(owner.address);
+          expect(buyerAddress).to.be.eq(buyer);
+          expect(token).to.be.eq(constants.AddressZero);
+          expect(amount).to.be.eq(BigNumber.from('1000'));
+        });
       });
 
-      it('Should emit a EscrowCreated event', async () => {
-        await expect(
-          deployer.deployNativeEscrow(
-            '0xad0637645341a160c4621a5ae22a709feca37234',
-            '1000'
-          )
-        )
-          .to.emit(deployer, 'EscrowCreated')
-          .withArgs(newEscrowAddress, newEscrowHash);
-      });
+      describe('ERC20 tokens', () => {
+        const tokenAddress = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
 
-      it('Should save the new escrow data', async () => {
-        await deployer.deployNativeEscrow(
-          '0xad0637645341a160c4621a5ae22a709feca37234',
-          '1000'
-        );
-        expect(await deployer.escrows(newEscrowAddress)).to.equal(newEscrowHash);
-      });
-    });
-    describe('ERC20 tokens', () => {
-      let newEscrowAddress: string;
-      let newEscrowHash: string;
-      const tokenAddress = '0xc2132d05d31c914a87c6611c10748aeb04b58e8f';
+        it('Should emit a EscrowCreated event', async () => {
+          await expect(deployer.deployERC20Escrow(orderID, buyer, tokenAddress, '1000'))
+            .to.emit(deployer, 'EscrowCreated')
+            .withArgs(
+              orderID,
+              ([exists, _, sellerAddress, buyerAddress, token, amount]: any) =>
+                exists &&
+                sellerAddress === owner.address &&
+                buyerAddress === buyer &&
+                token === tokenAddress &&
+                BigNumber.from('1000').eq(amount)
+            );
+        });
 
-      beforeEach(async () => {
-        newEscrowAddress = '0xfaC68Fded9F4345dBA71B1509Cd02DF2E4f2d207';
-        newEscrowHash = solidityKeccak256(
-          [
-            'address',
-            'address',
-            'address',
-            'address',
-            'uint256',
-            'uint8',
-            'address',
-            'address'
-          ],
-          [
-            newEscrowAddress,
-            owner.address,
-            '0xad0637645341a160c4621a5ae22a709feca37234',
-            tokenAddress,
-            '1000',
-            '30',
-            arbitrator.address,
-            feeRecipient.address
-          ]
-        );
-      });
-
-      it('Should emit a EscrowCreated event', async () => {
-        await expect(
-          deployer.deployERC20Escrow(
-            '0xad0637645341a160c4621a5ae22a709feca37234',
-            tokenAddress,
-            '1000'
-          )
-        )
-          .to.emit(deployer, 'EscrowCreated')
-          .withArgs(newEscrowAddress, newEscrowHash);
-      });
-
-      it('Should save the new escrow data', async () => {
-        await deployer.deployERC20Escrow(
-          '0xad0637645341a160c4621a5ae22a709feca37234',
-          tokenAddress,
-          '1000'
-        );
-        expect(await deployer.escrows(newEscrowAddress)).to.equal(newEscrowHash);
+        it('Should be available in the escrows list', async () => {
+          await deployer.deployERC20Escrow(orderID, buyer, tokenAddress, '1000');
+          const [exists, _, sellerAddress, buyerAddress, token, amount] =
+            await deployer.escrows(orderID);
+          expect(exists).to.be.true;
+          expect(sellerAddress).to.be.eq(owner.address);
+          expect(buyerAddress).to.be.eq(buyer);
+          expect(token).to.be.eq(tokenAddress);
+          expect(amount).to.be.eq(BigNumber.from('1000'));
+        });
       });
     });
   });

@@ -11,43 +11,50 @@ contract OpenPeerEscrow is ERC2771Context {
     // Address of the arbitrator (currently OP staff)
     address public arbitrator;
     // Address to receive the fees
-    address public feeRecipient;
-    address public immutable seller;
-    address public immutable buyer;
+    address payable public feeRecipient;
+    address payable public immutable seller;
+    address payable public immutable buyer;
     address public immutable token;
     uint256 public immutable amount;
-    uint32 public immutable fee;
+    uint256 public immutable fee;
+    uint32 public immutable sellerWaitingTime;
     uint32 public sellerCanCancelAfter;
 
     bool public dispute;
 
     /// @notice Settings
+    /// @param _seller Seller address
     /// @param _buyer Buyer address
     /// @param _token Token address or 0x0000000000000000000000000000000000000000 for native token
     /// @param _fee OP fee (bps) ex: 30 == 0.3%
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
+    /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
     /// @param _trustedForwarder Forwarder address
     constructor(
-        address _buyer,
+        address payable _seller,
+        address payable _buyer,
         address _token,
         uint256 _amount,
-        uint8 _fee,
+        uint256 _fee,
         address _arbitrator,
-        address _feeRecipient,
+        address payable _feeRecipient,
+        uint32 _sellerWaitingTime,
         address _trustedForwarder
     ) ERC2771Context(_trustedForwarder) {
         require(_amount > 0, "Invalid amount");
-        require(_buyer != _msgSender(), "Seller and buyer must be different");
+        require(_buyer != _seller, "Seller and buyer must be different");
+        require(_seller != address(0), "Invalid seller");
         require(_buyer != address(0), "Invalid buyer");
 
-        seller = _msgSender();
+        seller = _seller;
         token = _token;
         buyer = _buyer;
         amount = _amount;
-        fee = uint32(amount * _fee / 10_000);
+        fee = (amount * _fee / 10_000);
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
+        sellerWaitingTime = _sellerWaitingTime;
     }
 
     // Events
@@ -83,7 +90,7 @@ contract OpenPeerEscrow is ERC2771Context {
             IERC20(token).safeTransferFrom(_msgSender(), address(this), amount + fee );
         }
 
-        sellerCanCancelAfter = uint32(block.timestamp) + 24 hours;
+        sellerCanCancelAfter = uint32(block.timestamp) + sellerWaitingTime;
         emit Created();
     }
 
@@ -99,7 +106,7 @@ contract OpenPeerEscrow is ERC2771Context {
     /// @param _to Recipient address
     /// @param _amount Amount to be transfered
     /// @param _fee Fee to be transfered
-    function transferEscrowAndFees(address _to, uint256 _amount, uint32 _fee) private {
+    function transferEscrowAndFees(address payable _to, uint256 _amount, uint256 _fee) private {
         withdraw(_to, _amount);
         if (_fee > 0) {
             withdraw(feeRecipient, _fee);
@@ -137,36 +144,41 @@ contract OpenPeerEscrow is ERC2771Context {
     /// @notice Withdraw values in the contract
     /// @param _to Address to withdraw fees in to
     /// @param _amount Amount to withdraw
-    function withdraw(address _to, uint256 _amount) private  {
+    function withdraw(address payable _to, uint256 _amount) private  {
         if (token == address(0)) {
-            (bool sent,) = payable(_to).call{value: _amount}("");
+            (bool sent,) = _to.call{value: _amount}("");
             require(sent, "Failed to send MATIC");
         } else {
-            require(IERC20(token).transfer(payable(_to), _amount), "Failed to send tokens");
+            require(IERC20(token).transfer(_to, _amount), "Failed to send tokens");
         }
     }
 
     /// @notice Allow seller or buyer to open a dispute
     function openDispute() external {
-      require(_msgSender() == seller || _msgSender() == buyer, "Must be seller or buyer");
-      require(sellerCanCancelAfter > 0, "Funds not escrowed yet");
+        require(_msgSender() == seller || _msgSender() == buyer, "Must be seller or buyer");
 
-      dispute = true;
-      emit DisputeOpened();
+        if (token == address(0)) {
+            require(address(this).balance > 0, "No funds to dispute");
+        } else {
+            require(IERC20(token).balanceOf(address(this)) > 0, "No funds to dispute");
+        }
+
+        dispute = true;
+        emit DisputeOpened();
     }
 
     /// @notice Allow arbitrator to resolve a dispute
     /// @param _winner Address to receive the escrowed values - fees
     function resolveDispute(address payable _winner) external onlyArbitrator {
-      require(dispute, "Dispute is not open");
-      require(_winner == seller || _winner == buyer, "Winner must be seller or buyer");
+        require(dispute, "Dispute is not open");
+        require(_winner == seller || _winner == buyer, "Winner must be seller or buyer");
 
-      emit DisputeResolved();
-      transferEscrowAndFees(_winner, amount, fee);
+        emit DisputeResolved();
+        transferEscrowAndFees(_winner, amount, fee);
     }
 
     /// @notice Version recipient
     function versionRecipient() external pure returns (string memory) {
-  		  return "1.0";
+        return "1.0";
   	}
 }

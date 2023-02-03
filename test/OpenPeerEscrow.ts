@@ -47,12 +47,14 @@ describe('OpenPeerEscrow', () => {
     }
     buyerAccount = buyerAccount || buyer;
     const escrow = await OpenPeerEscrow.deploy(
+      seller.address,
       buyerAccount.address,
       tokenAddress,
       amount,
       fee,
       arbitrator.address,
       feeRecipient.address,
+      24 * 60 * 60,
       constants.AddressZero
     );
 
@@ -404,8 +406,20 @@ describe('OpenPeerEscrow', () => {
       );
     });
 
-    it('Should revert with if the funds were not escrowed', async () => {
-      await expect(escrow.openDispute()).to.be.revertedWith('Funds not escrowed yet');
+    describe('Native token', () => {
+      it('Should revert with if the funds were not escrowed', async () => {
+        await expect(escrow.openDispute()).to.be.revertedWith('No funds to dispute');
+      });
+    });
+
+    describe('ERC20 token', () => {
+      beforeEach(async () => {
+        await deployWithERC20();
+      });
+
+      it('Should revert with if the funds were not escrowed', async () => {
+        await expect(escrow.openDispute()).to.be.revertedWith('No funds to dispute');
+      });
     });
 
     it('Should open a dispute from seller', async () => {
@@ -517,5 +531,9 @@ describe('OpenPeerEscrow', () => {
         });
       });
     });
+  });
+
+  it('Should return a version recipient', async () => {
+    expect(await escrow.versionRecipient()).to.equal('1.0');
   });
 });
