@@ -2,15 +2,10 @@
 pragma solidity ^0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
 
 contract OpenPeerEscrow is ERC2771Context {
-    using SafeERC20 for IERC20;
-    // Settings
-    // Address of the arbitrator (currently OP staff)
     address public arbitrator;
-    // Address to receive the fees
     address payable public feeRecipient;
     address payable public immutable seller;
     address payable public immutable buyer;
@@ -55,10 +50,10 @@ contract OpenPeerEscrow is ERC2771Context {
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
         sellerWaitingTime = _sellerWaitingTime;
+        sellerCanCancelAfter = uint32(block.timestamp) + sellerWaitingTime;
     }
 
     // Events
-    event Created();
     event Released();
     event CancelledByBuyer();
     event SellerCancelDisabled();
@@ -79,19 +74,6 @@ contract OpenPeerEscrow is ERC2771Context {
     modifier onlyBuyer() {
         require(_msgSender() == buyer, "Must be buyer");
         _;
-    }
-
-    /// @notice Create and fund a new escrow.
-    function escrow() payable external {
-        require(sellerCanCancelAfter == 0, "Funds already escrowed");
-        if (token == address(0)) {
-            require(msg.value == amount + fee, "Incorrect MATIC sent");
-        } else {
-            IERC20(token).safeTransferFrom(_msgSender(), address(this), amount + fee );
-        }
-
-        sellerCanCancelAfter = uint32(block.timestamp) + sellerWaitingTime;
-        emit Created();
     }
 
     /// @notice Release ether or token in escrow to the buyer.
@@ -181,4 +163,6 @@ contract OpenPeerEscrow is ERC2771Context {
     function versionRecipient() external pure returns (string memory) {
         return "1.0";
   	}
+
+    receive() external payable {}
 }

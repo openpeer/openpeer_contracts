@@ -1,11 +1,16 @@
 import { expect } from 'chai';
-import { constants, VoidSigner } from 'ethers';
+import { BigNumber, constants, VoidSigner } from 'ethers';
 import { ethers } from 'hardhat';
 
-import { time } from '@nomicfoundation/hardhat-network-helpers';
+import { loadFixture, time } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
-import { ERC20, OpenPeerEscrow } from '../typechain-types';
+import {
+  ERC20,
+  OpenPeerEscrow,
+  OpenPeerEscrowsDeployer,
+  Token
+} from '../typechain-types';
 import { OpenPeerEscrowProps } from '../types/OpenPeerEscrow.types';
 
 const ONE_DAY_IN_SECS = 24 * 60 * 60;
@@ -16,16 +21,36 @@ describe('OpenPeerEscrow', () => {
   let buyer: SignerWithAddress;
   let token: string;
   let amount: string;
-  let arbitrator: SignerWithAddress;
   let feeRecipient: SignerWithAddress;
+  let arbitrator: SignerWithAddress;
 
   const loadAccounts = async () => {
     const [sellerAccount, buyerAccount, arbitratorAccount, feeRecipientAccount] =
       await ethers.getSigners();
     seller = sellerAccount;
     buyer = buyerAccount;
-    arbitrator = arbitratorAccount;
     feeRecipient = feeRecipientAccount;
+    arbitrator = arbitratorAccount;
+  };
+
+  const createDeployer = async () => {
+    const OpenPeerEscrowsDeployer = await ethers.getContractFactory(
+      'OpenPeerEscrowsDeployer'
+    );
+    const [owner] = await ethers.getSigners();
+    const fee = 30;
+    const sellerWaitingTime = 24 * 60 * 60; // 24 hours in seconds
+    const contract: OpenPeerEscrowsDeployer = await OpenPeerEscrowsDeployer.deploy(
+      arbitrator.address,
+      feeRecipient.address,
+      fee,
+      sellerWaitingTime,
+      constants.AddressZero
+    );
+
+    await contract.deployed();
+
+    return { contract, owner, arbitrator, feeRecipient, fee };
   };
 
   const deploy = async ({
@@ -36,27 +61,37 @@ describe('OpenPeerEscrow', () => {
     useERC20 = false
   }: OpenPeerEscrowProps) => {
     await loadAccounts();
-    const OpenPeerEscrow = await ethers.getContractFactory('OpenPeerEscrow');
 
+    const { contract: deployer } = await loadFixture(createDeployer);
+    const orderID = ethers.utils.formatBytes32String('1');
+    buyerAccount = buyerAccount || buyer;
     let tokenAddress = token;
-    let erc20Contract;
+    let erc20Contract: Token | undefined;
+
     if (useERC20) {
       const Token = await ethers.getContractFactory('Token');
       erc20Contract = await Token.deploy();
       tokenAddress = erc20Contract.address;
+      await erc20Contract.approve(deployer.address, 100000);
+      await deployer.deployERC20Escrow(
+        orderID,
+        buyerAccount.address,
+        tokenAddress,
+        amount
+      );
+    } else {
+      const bpsFee = BigNumber.from(amount)
+        .mul(BigNumber.from(fee))
+        .div(BigNumber.from('10000'));
+      const amountWithFee = BigNumber.from(amount).add(bpsFee).toString();
+      await deployer.deployNativeEscrow(orderID, buyerAccount.address, amount, {
+        value: amountWithFee
+      });
     }
-    buyerAccount = buyerAccount || buyer;
-    const escrow = await OpenPeerEscrow.deploy(
-      seller.address,
-      buyerAccount.address,
-      tokenAddress,
-      amount,
-      fee,
-      arbitrator.address,
-      feeRecipient.address,
-      24 * 60 * 60,
-      constants.AddressZero
-    );
+
+    const [_, address] = await deployer.escrows(orderID);
+    const OpenPeerEscrow = await ethers.getContractFactory('OpenPeerEscrow');
+    const escrow = OpenPeerEscrow.attach(address);
 
     return {
       erc20Contract,
@@ -78,7 +113,6 @@ describe('OpenPeerEscrow', () => {
     escrow = contract;
     token = tokenAddress;
     erc20 = erc20Contract!;
-    erc20!.approve(contract.address, '100000');
   };
 
   beforeEach(async () => {
@@ -115,11 +149,13 @@ describe('OpenPeerEscrow', () => {
       expect(await escrow.seller()).to.equal(seller.address);
       expect(await escrow.token()).to.equal(token);
       expect(await escrow.buyer()).to.equal(buyer.address);
+      expect(await escrow.arbitrator()).to.equal(arbitrator.address);
       expect(await escrow.amount()).to.equal(amount);
       expect(await escrow.fee()).to.equal(3);
-      expect(await escrow.sellerCanCancelAfter()).to.equal(0);
-      expect(await escrow.arbitrator()).to.equal(arbitrator.address);
       expect(await escrow.feeRecipient()).to.equal(feeRecipient.address);
+      expect(await escrow.sellerCanCancelAfter()).to.equal(
+        (await time.latest()) + ONE_DAY_IN_SECS
+      );
     });
 
     describe('With small amounts', () => {
@@ -135,73 +171,8 @@ describe('OpenPeerEscrow', () => {
     });
   });
 
-  describe('Escrow', () => {
-    describe('Native token', () => {
-      it('Should revert if funds were escrowed already', async () => {
-        await escrow.escrow({ value: '1003' });
-        await expect(escrow.escrow({ value: '1003' })).to.be.revertedWith(
-          'Funds already escrowed'
-        );
-      });
-      it('Should revert with a smaller amount', async () => {
-        await expect(escrow.escrow({ value: '100' })).to.be.revertedWith(
-          'Incorrect MATIC sent'
-        );
-      });
-      it('Should revert with a bigger amount', async () => {
-        await expect(escrow.escrow({ value: '100000000' })).to.be.revertedWith(
-          'Incorrect MATIC sent'
-        );
-      });
-      it('Should set the time when the seller can cancel', async () => {
-        await escrow.escrow({ value: '1003' });
-        expect(await escrow.sellerCanCancelAfter()).to.equal(
-          (await time.latest()) + ONE_DAY_IN_SECS
-        );
-      });
-      it('Should transfer funds to the escrow contract', async () => {
-        await expect(escrow.escrow({ value: '1003' })).to.changeEtherBalances(
-          [escrow, seller, buyer, feeRecipient],
-          [1003, -1003, 0, 0]
-        );
-      });
-      it('Should emit the Created event', async () => {
-        await expect(escrow.escrow({ value: '1003' })).to.emit(escrow, 'Created');
-      });
-    });
-
-    describe('ERC20 tokens', () => {
-      beforeEach(deployWithERC20);
-
-      it('Should revert if funds were escrowed already', async () => {
-        await escrow.escrow();
-        await expect(escrow.escrow()).to.be.revertedWith('Funds already escrowed');
-      });
-
-      it('Should set the time when the seller can cancel', async () => {
-        await escrow.escrow();
-        expect(await escrow.sellerCanCancelAfter()).to.equal(
-          (await time.latest()) + ONE_DAY_IN_SECS
-        );
-      });
-      it('Should transfer funds to the escrow contract', async () => {
-        await expect(escrow.escrow()).to.changeTokenBalances(
-          erc20,
-          [escrow, seller, buyer, feeRecipient],
-          [1003, -1003, 0, 0]
-        );
-      });
-      it('Should emit the Created event', async () => {
-        await expect(escrow.escrow()).to.emit(escrow, 'Created');
-      });
-    });
-  });
-
   describe('Release', () => {
     describe('Native token', () => {
-      beforeEach(async () => {
-        await escrow.escrow({ value: '1003' });
-      });
       it('Should revert with an address different than buyer', async () => {
         const [, buyerAccount] = await ethers.getSigners();
         await expect(escrow.connect(buyerAccount).release()).to.be.revertedWith(
@@ -222,7 +193,6 @@ describe('OpenPeerEscrow', () => {
     describe('ERC20 tokens', () => {
       beforeEach(async () => {
         await deployWithERC20();
-        await escrow.escrow();
       });
       it('Should revert with an address different than seller', async () => {
         const [, buyerAccount] = await ethers.getSigners();
@@ -248,7 +218,6 @@ describe('OpenPeerEscrow', () => {
 
     describe('Native token', () => {
       beforeEach(async () => {
-        await escrow.escrow({ value: '1003' });
         const [, secondAccount] = await ethers.getSigners();
         buyerAccount = secondAccount;
       });
@@ -272,7 +241,6 @@ describe('OpenPeerEscrow', () => {
     describe('ERC20 tokens', () => {
       beforeEach(async () => {
         await deployWithERC20();
-        await escrow.escrow();
         const [, secondAccount] = await ethers.getSigners();
         buyerAccount = secondAccount;
       });
@@ -296,12 +264,7 @@ describe('OpenPeerEscrow', () => {
   });
 
   describe('Seller cancel', () => {
-    let buyerAccount: SignerWithAddress;
-
     describe('Native token', () => {
-      beforeEach(async () => {
-        await escrow.escrow({ value: '1003' });
-      });
       it('Should revert with an address different than buyer', async () => {
         const [, buyerAccount] = await ethers.getSigners();
         await expect(escrow.connect(buyerAccount).sellerCancel()).to.be.revertedWith(
@@ -333,7 +296,6 @@ describe('OpenPeerEscrow', () => {
     describe('ERC20 tokens', () => {
       beforeEach(async () => {
         await deployWithERC20();
-        await escrow.escrow();
       });
       it('Should revert with an address different than seller', async () => {
         const [, buyerAccount] = await ethers.getSigners();
@@ -370,7 +332,6 @@ describe('OpenPeerEscrow', () => {
 
     describe('Native token', () => {
       beforeEach(async () => {
-        await escrow.escrow({ value: '1003' });
         const [, secondAccount] = await ethers.getSigners();
         buyerAccount = secondAccount;
       });
@@ -407,7 +368,8 @@ describe('OpenPeerEscrow', () => {
     });
 
     describe('Native token', () => {
-      it('Should revert with if the funds were not escrowed', async () => {
+      it('Should revert with if there are no funds', async () => {
+        await escrow.release();
         await expect(escrow.openDispute()).to.be.revertedWith('No funds to dispute');
       });
     });
@@ -417,25 +379,23 @@ describe('OpenPeerEscrow', () => {
         await deployWithERC20();
       });
 
-      it('Should revert with if the funds were not escrowed', async () => {
+      it('Should revert with if there are no funds', async () => {
+        await escrow.release();
         await expect(escrow.openDispute()).to.be.revertedWith('No funds to dispute');
       });
     });
 
     it('Should open a dispute from seller', async () => {
-      await escrow.escrow({ value: '1003' });
       await escrow.openDispute();
       expect(await escrow.dispute()).to.true;
     });
 
     it('Should open a dispute from buyer', async () => {
-      await escrow.escrow({ value: '1003' });
       await escrow.connect(buyerAccount).openDispute();
       expect(await escrow.dispute()).to.true;
     });
 
     it('Should emit an DisputeOpened event', async () => {
-      await escrow.escrow({ value: '1003' });
       await expect(escrow.openDispute()).to.emit(escrow, 'DisputeOpened');
     });
   });
@@ -461,7 +421,6 @@ describe('OpenPeerEscrow', () => {
     });
 
     it('Should revert with a wrong winner', async () => {
-      await escrow.escrow({ value: '1003' });
       await escrow.openDispute();
       await expect(
         escrow.connect(arbitrator).resolveDispute(constants.AddressZero)
@@ -469,7 +428,6 @@ describe('OpenPeerEscrow', () => {
     });
 
     it('Should emit an DisputeResolved event', async () => {
-      await escrow.escrow({ value: '1003' });
       await escrow.openDispute();
       await expect(escrow.connect(arbitrator).resolveDispute(seller.address)).to.emit(
         escrow,
@@ -480,7 +438,6 @@ describe('OpenPeerEscrow', () => {
     describe('Valid resolutions', () => {
       describe('Native token', () => {
         beforeEach(async () => {
-          await escrow.escrow({ value: '1003' });
           await escrow.openDispute();
         });
 
@@ -505,7 +462,6 @@ describe('OpenPeerEscrow', () => {
       describe('ERC20 tokens', () => {
         beforeEach(async () => {
           await deployWithERC20();
-          await escrow.escrow();
           await escrow.openDispute();
         });
         it('Should result with the seller as winner', async () => {
