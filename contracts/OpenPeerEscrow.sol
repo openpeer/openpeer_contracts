@@ -138,6 +138,7 @@ contract OpenPeerEscrow is ERC2771Context {
     /// @notice Allow seller or buyer to open a dispute
     function openDispute() external {
         require(_msgSender() == seller || _msgSender() == buyer, "Must be seller or buyer");
+        require(sellerCanCancelAfter == 1, "Cannot open a dispute yet");
 
         if (token == address(0)) {
             require(address(this).balance > 0, "No funds to dispute");

@@ -98,7 +98,10 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
             (bool sent,) = address(deployment).call{value: amount}("");
             require(sent, "Failed to send MATIC");
         } else {
+            uint256 balanceBefore = IERC20(_token).balanceOf(address(deployment));
             IERC20(_token).safeTransferFrom(_msgSender(), address(deployment), amount);
+            uint256 balanceAfter = IERC20(_token).balanceOf(address(deployment));
+            require((balanceAfter - balanceBefore) == amount, "Wrong ERC20 amount");
         }
 
         Escrow memory escrow = Escrow(true, address(deployment), _msgSender(), _buyer, _token, _amount);

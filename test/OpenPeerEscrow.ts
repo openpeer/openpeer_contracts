@@ -369,8 +369,16 @@ describe('OpenPeerEscrow', () => {
 
     describe('Native token', () => {
       it('Should revert with if there are no funds', async () => {
+        await escrow.connect(buyerAccount).markAsPaid();
         await escrow.release();
         await expect(escrow.openDispute()).to.be.revertedWith('No funds to dispute');
+      });
+
+      it('Should revert with if the buyer did not mark as paid', async () => {
+        await escrow.release();
+        await expect(escrow.openDispute()).to.be.revertedWith(
+          'Cannot open a dispute yet'
+        );
       });
     });
 
@@ -380,22 +388,33 @@ describe('OpenPeerEscrow', () => {
       });
 
       it('Should revert with if there are no funds', async () => {
+        await escrow.connect(buyerAccount).markAsPaid();
         await escrow.release();
         await expect(escrow.openDispute()).to.be.revertedWith('No funds to dispute');
+      });
+
+      it('Should revert with if the buyer did not mark as paid', async () => {
+        await escrow.release();
+        await expect(escrow.openDispute()).to.be.revertedWith(
+          'Cannot open a dispute yet'
+        );
       });
     });
 
     it('Should open a dispute from seller', async () => {
+      await escrow.connect(buyerAccount).markAsPaid();
       await escrow.openDispute();
       expect(await escrow.dispute()).to.true;
     });
 
     it('Should open a dispute from buyer', async () => {
+      await escrow.connect(buyerAccount).markAsPaid();
       await escrow.connect(buyerAccount).openDispute();
       expect(await escrow.dispute()).to.true;
     });
 
     it('Should emit an DisputeOpened event', async () => {
+      await escrow.connect(buyerAccount).markAsPaid();
       await expect(escrow.openDispute()).to.emit(escrow, 'DisputeOpened');
     });
   });
@@ -404,8 +423,10 @@ describe('OpenPeerEscrow', () => {
     let arbitrator: SignerWithAddress;
 
     beforeEach(async () => {
-      const [, , otherAccount] = await ethers.getSigners();
+      const [, buyerAccount, otherAccount] = await ethers.getSigners();
       arbitrator = otherAccount;
+      buyer = buyerAccount;
+      await escrow.connect(buyerAccount).markAsPaid();
     });
 
     it('Should revert with an address different than arbitrator', async () => {
@@ -462,6 +483,7 @@ describe('OpenPeerEscrow', () => {
       describe('ERC20 tokens', () => {
         beforeEach(async () => {
           await deployWithERC20();
+          await escrow.connect(buyer).markAsPaid();
           await escrow.openDispute();
         });
         it('Should result with the seller as winner', async () => {
