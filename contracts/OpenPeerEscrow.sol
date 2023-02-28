@@ -2,22 +2,24 @@
 pragma solidity ^0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
 
-contract OpenPeerEscrow is ERC2771Context {
+contract OpenPeerEscrow is ERC2771Context, Initializable {
     address public arbitrator;
     address payable public feeRecipient;
-    address payable public immutable seller;
-    address payable public immutable buyer;
-    address public immutable token;
-    uint256 public immutable amount;
-    uint256 public immutable fee;
-    uint32 public immutable sellerWaitingTime;
+    address payable public seller;
+    address payable public buyer;
+    address public token;
+    uint256 public amount;
+    uint256 public fee;
+    uint32 public sellerWaitingTime;
     uint32 public sellerCanCancelAfter;
-
     bool public dispute;
 
-    /// @notice Settings
+    /// @param _trustedForwarder Forwarder address
+    constructor(address _trustedForwarder) ERC2771Context(_trustedForwarder) {}
+
     /// @param _seller Seller address
     /// @param _buyer Buyer address
     /// @param _token Token address or 0x0000000000000000000000000000000000000000 for native token
@@ -25,8 +27,7 @@ contract OpenPeerEscrow is ERC2771Context {
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
     /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
-    /// @param _trustedForwarder Forwarder address
-    constructor(
+    function initialize(
         address payable _seller,
         address payable _buyer,
         address _token,
@@ -34,9 +35,8 @@ contract OpenPeerEscrow is ERC2771Context {
         uint256 _fee,
         address _arbitrator,
         address payable _feeRecipient,
-        uint32 _sellerWaitingTime,
-        address _trustedForwarder
-    ) ERC2771Context(_trustedForwarder) {
+        uint32 _sellerWaitingTime
+    ) public virtual initializer {
         require(_amount > 0, "Invalid amount");
         require(_buyer != _seller, "Seller and buyer must be different");
         require(_seller != address(0), "Invalid seller");
