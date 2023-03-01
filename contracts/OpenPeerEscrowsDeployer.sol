@@ -3,6 +3,7 @@ pragma solidity ^0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
 import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
 import { Ownable } from "./libs/Ownable.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
@@ -21,6 +22,8 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     uint32 public sellerWaitingTime;
 
     bool public stopped = false;
+
+    address public implementation;
 
     /**********************
     +   Events            +
@@ -53,6 +56,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         feeRecipient = _feeRecipient;
         fee = _fee;
         sellerWaitingTime = _sellerWaitingTime;
+        implementation = address(new OpenPeerEscrow(_trustedForwarder));
     }
 
     /***********************
@@ -85,26 +89,26 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
             require(msg.value == amount, "Incorrect MATIC sent");
         }
 
-        OpenPeerEscrow deployment = new OpenPeerEscrow(payable(_msgSender()),
+        address deployment = Clones.cloneDeterministic(implementation, _orderID);
+        OpenPeerEscrow(payable(deployment)).initialize(payable(_msgSender()),
                                                        _buyer,
                                                        _token,
                                                        _amount,
                                                        fee,
                                                        arbitrator,
                                                        feeRecipient,
-                                                       sellerWaitingTime,
-                                                       _trustedForwarder);
+                                                       sellerWaitingTime);
         if (_token == address(0)) {
-            (bool sent,) = address(deployment).call{value: amount}("");
+            (bool sent,) = deployment.call{value: amount}("");
             require(sent, "Failed to send MATIC");
         } else {
-            uint256 balanceBefore = IERC20(_token).balanceOf(address(deployment));
-            IERC20(_token).safeTransferFrom(_msgSender(), address(deployment), amount);
-            uint256 balanceAfter = IERC20(_token).balanceOf(address(deployment));
+            uint256 balanceBefore = IERC20(_token).balanceOf(deployment);
+            IERC20(_token).safeTransferFrom(_msgSender(), deployment, amount);
+            uint256 balanceAfter = IERC20(_token).balanceOf(deployment);
             require((balanceAfter - balanceBefore) == amount, "Wrong ERC20 amount");
         }
 
-        Escrow memory escrow = Escrow(true, address(deployment), _msgSender(), _buyer, _token, _amount);
+        Escrow memory escrow = Escrow(true, deployment, _msgSender(), _buyer, _token, _amount);
         escrows[_orderID] = escrow;
         emit EscrowCreated(_orderID, escrow);
     }
@@ -141,6 +145,12 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @param trustedForwarder biconomy forwarder
     function setTrustedForwarder(address trustedForwarder) external onlyOwner {
         _trustedForwarder = trustedForwarder;
+    }
+
+    /// @notice Updates the implementation
+    /// @param _implementation Address of the implementation
+    function setImplementation(address payable _implementation) public onlyOwner {
+        implementation = _implementation;
     }
 
     /// @notice Pauses and activate the contract
