@@ -3,6 +3,7 @@
 ```shell
 
   OpenPeerEscrow
+    ✓ Should return a version recipient
     Deployment
       ✓ Should deploy successfully
       Validations
@@ -11,37 +12,52 @@
         ✓ Should revert with burn address as buyer
       With small amounts
         ✓ Should calculate the right fee
-    Escrow
-      Native token
-        ✓ Should revert if funds were escrowed already
-        ✓ Should revert with a smaller amount
-        ✓ Should revert with a bigger amount
-        ✓ Should set the time when the seller can cancel
-        ✓ Should transfer funds to the escrow contract
-        ✓ Should emit the Created event
-      ERC20 tokens
-        ✓ Should revert if funds were escrowed already
-        ✓ Should set the time when the seller can cancel
-        ✓ Should transfer funds to the escrow contract
-        ✓ Should emit the Created event
     Release
       Native token
         ✓ Should revert with an address different than buyer
         ✓ Should transfer funds to the buyer and fee recipient
         ✓ Should emit the Released event
+        With a dispute
+          When only the seller paid
+            ✓ Should return the dispute fee to the seller
+          When only the buyer paid
+            ✓ Should return the dispute fee to the buyer
+          When both parts paid
+            ✓ Should return the dispute fee to the winner
       ERC20 tokens
         ✓ Should revert with an address different than seller
         ✓ Should transfer funds to the buyer and fee recipient
         ✓ Should emit the Released event
+        With a dispute
+          When only the seller paid
+            ✓ Should return the dispute fee to the seller
+          When only the buyer paid
+            ✓ Should return the dispute fee to the buyer
+          When both parts paid
+            ✓ Should return the dispute fee to the winner
     Buyer cancel
       Native token
         ✓ Should revert with an address different than buyer
         ✓ Should transfer funds to the seller
         ✓ Should emit the CancelledByBuyer event
+        With a dispute
+          When only the seller paid
+            ✓ Should return the dispute fee to the seller
+          When only the buyer paid
+            ✓ Should return the dispute fee to the buyer
+          When both parts paid
+            ✓ Should return the dispute fee to the winner
       ERC20 tokens
         ✓ Should revert with an address different than buyer
         ✓ Should transfer funds to the seller
         ✓ Should emit the CancelledByBuyer event
+        With a dispute
+          When only the seller paid
+            ✓ Should return the dispute fee to the seller
+          When only the buyer paid
+            ✓ Should return the dispute fee to the buyer
+          When both parts paid
+            ✓ Should return the dispute fee to the winner
     Seller cancel
       Native token
         ✓ Should revert with an address different than buyer
@@ -53,17 +69,37 @@
         ✓ Should not transfer funds if the seller cannot cancel
         ✓ Should transfer funds to the seller
         ✓ Should emit the CancelledBySeller event
-    Buyer cancel
+    Mark as paid
       Native token
         ✓ Should revert with an address different than buyer
-        ✓ Should transfer funds to the seller
+        ✓ Should set sellerCanCancelAfter as 1
         ✓ Should emit the SellerCancelDisabled event
     Open dispute
       ✓ Should revert with an address different than seller or buyer
-      ✓ Should revert with if the funds were not escrowed
-      ✓ Should open a dispute from seller
-      ✓ Should open a dispute from buyer
-      ✓ Should emit an DisputeOpened event
+      As the seller
+        ✓ Should revert if there is no dispute payment
+        ✓ Should revert if there is not enough for the dispute payment
+        ✓ Should revert with more than the dispute fee value
+        ✓ Should revert if the user already paid
+        ✓ Should mark the dispute as paid by the seller
+        ✓ Should transfer 1 MATIC to the contract
+        ✓ Should return true
+        ✓ Should emit an DisputeOpened event
+      As the buyer
+        ✓ Should revert if there is no dispute payment
+        ✓ Should revert if there is not enough for the dispute payment
+        ✓ Should revert with more than the dispute fee value
+        ✓ Should revert if the user already paid
+        ✓ Should mark the dispute as paid by the buyer
+        ✓ Should transfer 1 MATIC to the contract
+        ✓ Should return true
+        ✓ Should emit an DisputeOpened event
+      Native token
+        ✓ Should revert with if there are no funds
+        ✓ Should revert with if the buyer did not mark as paid
+      ERC20 token
+        ✓ Should revert with if there are no funds
+        ✓ Should revert with if the buyer did not mark as paid
     Resolve dispute
       ✓ Should revert with an address different than arbitrator
       ✓ Should revert if the dispute is not open
@@ -71,29 +107,61 @@
       ✓ Should emit an DisputeResolved event
       Valid resolutions
         Native token
-          ✓ Should result with the seller as winner
-          ✓ Should result with the buyer as winner
+          When only the seller paid
+            With the seller as winner
+              ✓ Should return the tokens to the seller
+            With the buyer as winner
+              ✓ Should return the tokens to the buyer
+          When only the buyer paid
+            With the seller as winner
+              ✓ Should return the tokens to the seller
+            With the buyer as winner
+              ✓ Should return the tokens to the buyer
+          When both parts paid
+            With the seller as winner
+              ✓ Should return the tokens to the seller
+            With the buyer as winner
+              ✓ Should return the tokens to the buyer
         ERC20 tokens
-          ✓ Should result with the seller as winner
-          ✓ Should result with the buyer as winner
+          When only the seller paid
+            With the seller as winner
+              ✓ Should return the tokens to the seller
+            With the buyer as winner
+              ✓ Should return the tokens to the buyer
+          When only the buyer paid
+            With the seller as winner
+              ✓ Should return the tokens to the seller
+            With the buyer as winner
+              ✓ Should return the tokens to the buyer
+          When both parts paid
+            With the seller as winner
+              ✓ Should return the tokens to the seller
+            With the buyer as winner
+              ✓ Should return the tokens to the buyer
 
   OpenPeerEscrowsDeployer
     Deployment
       ✓ Should deploy successfully
-      Settings
-        ✓ Should update the fee
-        ✓ Should update the fee recipient
-        ✓ Should update the arbitrator
-        Validations
-          ✓ Should revert with non owner tries to update the fee
-          ✓ Should revert with non owner tries to update the fee recipient
-          ✓ Should revert with non owner tries to update the arbitrator
+    Settings
+      ✓ Should update the fee
+      ✓ Should update the fee recipient
+      ✓ Should update the arbitrator
+      Validations
+        ✓ Should revert with non owner tries to update the fee
+        ✓ Should revert with non owner tries to update the fee recipient
+        ✓ Should revert with non owner tries to update the arbitrator
+        ✓ Should revert with an already deployed order
+    Escrow
       Native token
         ✓ Should emit a EscrowCreated event
-        ✓ Should save the new escrow data
+        ✓ Should be available in the escrows list
+        ✓ Should revert with a smaller amount
+        ✓ Should revert with a bigger amount
+        ✓ Should transfer funds to the escrow contract
       ERC20 tokens
         ✓ Should emit a EscrowCreated event
-        ✓ Should save the new escrow data
+        ✓ Should be available in the escrows list
+        ✓ Should transfer funds to the escrow contract
 
 ·--------------------------------------------------|----------------------------|-------------|-----------------------------·
 |               Solc version: 0.8.17               ·  Optimizer enabled: false  ·  Runs: 200  ·  Block limit: 30000000 gas  │
@@ -102,42 +170,36 @@
 ····························|······················|··············|·············|·············|···············|··············
 |  Contract                 ·  Method              ·  Min         ·  Max        ·  Avg        ·  # calls      ·  usd (avg)  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  buyerCancel         ·       34495  ·      37042  ·      35910  ·            9  ·          -  │
+|  OpenPeerEscrow           ·  buyerCancel         ·       53013  ·      78163  ·      62519  ·           27  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  escrow              ·       27843  ·      73221  ·      47696  ·           48  ·          -  │
+|  OpenPeerEscrow           ·  markAsPaid          ·           -  ·          -  ·      34523  ·           55  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  markAsPaid          ·           -  ·          -  ·      29699  ·            3  ·          -  │
+|  OpenPeerEscrow           ·  openDispute         ·       60460  ·      69254  ·      63453  ·           50  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  openDispute         ·       29756  ·      30076  ·      29788  ·           10  ·          -  │
+|  OpenPeerEscrow           ·  release             ·       64812  ·     122342  ·      90304  ·           34  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  release             ·       46202  ·      82993  ·      67663  ·           12  ·          -  │
+|  OpenPeerEscrow           ·  resolveDispute      ·       71885  ·     125728  ·      95781  ·           34  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  resolveDispute      ·       49029  ·      85849  ·      66693  ·           16  ·          -  │
+|  OpenPeerEscrow           ·  sellerCancel        ·       31059  ·      58160  ·      47687  ·           18  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrow           ·  sellerCancel        ·       26213  ·      39484  ·      33658  ·           18  ·          -  │
+|  OpenPeerEscrowsDeployer  ·  deployERC20Escrow   ·           -  ·          -  ·     448143  ·           32  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrowsDeployer  ·  deployERC20Escrow   ·           -  ·          -  ·    1862228  ·            3  ·          -  │
+|  OpenPeerEscrowsDeployer  ·  deployNativeEscrow  ·      348393  ·     368305  ·     368073  ·           86  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrowsDeployer  ·  deployNativeEscrow  ·           -  ·          -  ·    1861597  ·            3  ·          -  │
+|  OpenPeerEscrowsDeployer  ·  setArbitrator       ·           -  ·          -  ·      26530  ·            1  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrowsDeployer  ·  setArbitrator       ·           -  ·          -  ·      26486  ·            1  ·          -  │
+|  OpenPeerEscrowsDeployer  ·  setFee              ·           -  ·          -  ·      31218  ·            1  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrowsDeployer  ·  setFee              ·           -  ·          -  ·      31327  ·            1  ·          -  │
+|  OpenPeerEscrowsDeployer  ·  setFeeRecipient     ·           -  ·          -  ·      26551  ·            1  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
-|  OpenPeerEscrowsDeployer  ·  setFeeRecipient     ·           -  ·          -  ·      31285  ·            1  ·          -  │
-····························|······················|··············|·············|·············|···············|··············
-|  Token                    ·  approve             ·       46840  ·      46852  ·      46851  ·           16  ·          -  │
+|  Token                    ·  approve             ·           -  ·          -  ·      46852  ·           25  ·          -  │
 ····························|······················|··············|·············|·············|···············|··············
 |  Deployments                                     ·                                          ·  % of limit   ·             │
 ···················································|··············|·············|·············|···············|··············
-|  OpenPeerEscrow                                  ·     1971073  ·    1971325  ·    1971153  ·        6.6 %  ·          -  │
-···················································|··············|·············|·············|···············|··············
-|  OpenPeerEscrowsDeployer                         ·           -  ·          -  ·    3443089  ·       11.5 %  ·          -  │
+|  OpenPeerEscrowsDeployer                         ·           -  ·          -  ·    5040802  ·       16.8 %  ·          -  │
 ···················································|··············|·············|·············|···············|··············
 |  Token                                           ·           -  ·          -  ·    1168929  ·        3.9 %  ·          -  │
 ·--------------------------------------------------|--------------|-------------|-------------|---------------|-------------·
-
-  62 passing (5s)
 
 
 ```

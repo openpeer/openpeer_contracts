@@ -16,6 +16,9 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     uint32 public sellerWaitingTime;
     uint32 public sellerCanCancelAfter;
     bool public dispute;
+    uint256 public immutable DISPUTE_FEE = 1 ether;
+
+    mapping (address => bool) public paidForDispute;
 
     /// @param _trustedForwarder Forwarder address
     constructor(address _trustedForwarder) ERC2771Context(_trustedForwarder) {}
@@ -58,7 +61,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     event CancelledByBuyer();
     event SellerCancelDisabled();
     event CancelledBySeller();
-    event DisputeOpened();
+    event DisputeOpened(address _sender);
     event DisputeResolved();
 
     modifier onlySeller() {
@@ -79,7 +82,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @notice Release ether or token in escrow to the buyer.
     /// @return bool
     function release() external onlySeller returns (bool) {
-        transferEscrowAndFees(buyer, amount, fee);
+        transferEscrowAndFees(buyer, amount, fee, false);
         emit Released();
         return true;
     }
@@ -88,17 +91,50 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _to Recipient address
     /// @param _amount Amount to be transfered
     /// @param _fee Fee to be transfered
-    function transferEscrowAndFees(address payable _to, uint256 _amount, uint256 _fee) private {
+    /// @param _disputeResolution Is a dispute being resolved
+    function transferEscrowAndFees(
+        address payable _to,
+        uint256 _amount,
+        uint256 _fee,
+        bool _disputeResolution
+    ) private {
+        // transfers the amount to the seller | buyer
         withdraw(_to, _amount);
         if (_fee > 0) {
+            // transfers the fee to the fee recipient
             withdraw(feeRecipient, _fee);
+        }
+
+        if (_disputeResolution) {
+            (bool sentToWinner,) = _to.call{value: DISPUTE_FEE}("");
+            require(sentToWinner, "Failed to send the fee MATIC to the winner");
+
+            if (paidForDispute[seller] && paidForDispute[buyer]) {
+                (bool sent,) = feeRecipient.call{value: DISPUTE_FEE}("");
+                require(sent, "Failed to send the fee MATIC to the fee recipient");
+            }
+        } else if (paidForDispute[seller] && !paidForDispute[buyer]) {
+            // only the seller paid for the dispute, returns the fee to the seller
+            (bool sent,) = seller.call{value: DISPUTE_FEE}("");
+            require(sent, "Failed to send the fee MATIC to the seller");
+        } else if (paidForDispute[buyer] && !paidForDispute[seller]) {
+            // only the buyer paid for the dispute, returns the fee to the buyer
+            (bool sent,) = buyer.call{value: DISPUTE_FEE}("");
+            require(sent, "Failed to send the fee MATIC to the buyer");
+        } else if (paidForDispute[buyer] && paidForDispute[seller]) {
+            // seller and buyer paid for the dispute, split the fee between the winner and the fee recipient
+            (bool sentToWinner,) = _to.call{value: DISPUTE_FEE}("");
+            require(sentToWinner, "Failed to send the fee MATIC to winner");
+
+            (bool sent,) = feeRecipient.call{value: DISPUTE_FEE}("");
+            require(sent, "Failed to send the fee MATIC to the fee recipient");
         }
     }
 
     /// @notice Cancel the escrow as a buyer with 0 fees
     /// @return bool
     function buyerCancel() external onlyBuyer returns (bool) {
-        transferEscrowAndFees(seller, amount + fee, 0);
+        transferEscrowAndFees(seller, amount + fee, 0, false);
         emit CancelledByBuyer();
         return true;
     }
@@ -110,7 +146,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             return false;
         }
 
-        transferEscrowAndFees(seller, amount + fee, 0);
+        transferEscrowAndFees(seller, amount + fee, 0, false);
         emit CancelledBySeller();
         return true;
     }
@@ -136,18 +172,21 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     }
 
     /// @notice Allow seller or buyer to open a dispute
-    function openDispute() external {
+    function openDispute() external payable {
         require(_msgSender() == seller || _msgSender() == buyer, "Must be seller or buyer");
         require(sellerCanCancelAfter == 1, "Cannot open a dispute yet");
+        require(msg.value == DISPUTE_FEE, "To open a dispute, you must pay 1 MATIC");
+        require(!paidForDispute[_msgSender()], "This address already paid for the dispute");
 
         if (token == address(0)) {
-            require(address(this).balance > 0, "No funds to dispute");
+            require(address(this).balance - msg.value > 0, "No funds to dispute");
         } else {
             require(IERC20(token).balanceOf(address(this)) > 0, "No funds to dispute");
         }
 
         dispute = true;
-        emit DisputeOpened();
+        paidForDispute[_msgSender()] = true;
+        emit DisputeOpened(_msgSender());
     }
 
     /// @notice Allow arbitrator to resolve a dispute
@@ -157,7 +196,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         require(_winner == seller || _winner == buyer, "Winner must be seller or buyer");
 
         emit DisputeResolved();
-        transferEscrowAndFees(_winner, amount, fee);
+        transferEscrowAndFees(_winner, amount, fee, true);
     }
 
     /// @notice Version recipient
