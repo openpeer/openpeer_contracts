@@ -16,12 +16,14 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     uint32 public sellerWaitingTime;
     uint32 public sellerCanCancelAfter;
     bool public dispute;
-    uint256 public immutable DISPUTE_FEE = 1 ether;
+    uint256 public immutable disputeFee = 1 ether;
 
     mapping (address => bool) public paidForDispute;
 
     /// @param _trustedForwarder Forwarder address
-    constructor(address _trustedForwarder) ERC2771Context(_trustedForwarder) {}
+    constructor(address _trustedForwarder) ERC2771Context(_trustedForwarder) {
+      _disableInitializers();
+    }
 
     /// @param _seller Seller address
     /// @param _buyer Buyer address
@@ -39,7 +41,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address _arbitrator,
         address payable _feeRecipient,
         uint32 _sellerWaitingTime
-    ) public virtual initializer {
+    ) external virtual initializer {
         require(_amount > 0, "Invalid amount");
         require(_buyer != _seller, "Seller and buyer must be different");
         require(_seller != address(0), "Invalid seller");
@@ -106,27 +108,27 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         }
 
         if (_disputeResolution) {
-            (bool sentToWinner,) = _to.call{value: DISPUTE_FEE}("");
+            (bool sentToWinner,) = _to.call{value: disputeFee}("");
             require(sentToWinner, "Failed to send the fee MATIC to the winner");
 
             if (paidForDispute[seller] && paidForDispute[buyer]) {
-                (bool sent,) = feeRecipient.call{value: DISPUTE_FEE}("");
+                (bool sent,) = feeRecipient.call{value: disputeFee}("");
                 require(sent, "Failed to send the fee MATIC to the fee recipient");
             }
         } else if (paidForDispute[seller] && !paidForDispute[buyer]) {
             // only the seller paid for the dispute, returns the fee to the seller
-            (bool sent,) = seller.call{value: DISPUTE_FEE}("");
+            (bool sent,) = seller.call{value: disputeFee}("");
             require(sent, "Failed to send the fee MATIC to the seller");
         } else if (paidForDispute[buyer] && !paidForDispute[seller]) {
             // only the buyer paid for the dispute, returns the fee to the buyer
-            (bool sent,) = buyer.call{value: DISPUTE_FEE}("");
+            (bool sent,) = buyer.call{value: disputeFee}("");
             require(sent, "Failed to send the fee MATIC to the buyer");
         } else if (paidForDispute[buyer] && paidForDispute[seller]) {
             // seller and buyer paid for the dispute, split the fee between the winner and the fee recipient
-            (bool sentToWinner,) = _to.call{value: DISPUTE_FEE}("");
+            (bool sentToWinner,) = _to.call{value: disputeFee}("");
             require(sentToWinner, "Failed to send the fee MATIC to winner");
 
-            (bool sent,) = feeRecipient.call{value: DISPUTE_FEE}("");
+            (bool sent,) = feeRecipient.call{value: disputeFee}("");
             require(sent, "Failed to send the fee MATIC to the fee recipient");
         }
     }
@@ -175,7 +177,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     function openDispute() external payable {
         require(_msgSender() == seller || _msgSender() == buyer, "Must be seller or buyer");
         require(sellerCanCancelAfter == 1, "Cannot open a dispute yet");
-        require(msg.value == DISPUTE_FEE, "To open a dispute, you must pay 1 MATIC");
+        require(msg.value == disputeFee, "To open a dispute, you must pay 1 MATIC");
         require(!paidForDispute[_msgSender()], "This address already paid for the dispute");
 
         if (token == address(0)) {
