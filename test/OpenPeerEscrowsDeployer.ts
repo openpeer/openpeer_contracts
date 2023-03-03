@@ -65,6 +65,26 @@ describe('OpenPeerEscrowsDeployer', () => {
       expect(await deployer.fee()).to.be.equal(fee);
       expect(await deployer.sellerWaitingTime()).to.be.equal(sellerWaitingTime);
     });
+
+    it('Should initialize the implementation', async () => {
+      const implementation = await deployer.implementation();
+      const escrow = await ethers.getContractFactory('OpenPeerEscrow');
+
+      await expect(
+        escrow
+          .attach(implementation)
+          .initialize(
+            owner.address,
+            arbitrator.address,
+            constants.AddressZero,
+            '1000',
+            '30',
+            arbitrator.address,
+            feeRecipient.address,
+            sellerWaitingTime
+          )
+      ).to.be.revertedWith('Initializable: contract is already initialized');
+    });
   });
 
   describe('Settings', () => {
