@@ -21,7 +21,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     uint256 public fee;
     uint32 public sellerWaitingTime;
 
-    bool public stopped = false;
+    bool public stopped;
 
     address public implementation;
 
@@ -78,7 +78,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
 
     function deploy(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) private {
         uint256 _fee = (_amount * fee / 10_000);
-        bytes32 _orderHash = keccak256(abi.encodePacked(_orderID, _msgSender(), _buyer, _token, _amount, fee));
+        bytes32 _orderHash = keccak256(abi.encodePacked(_orderID, _msgSender(), _buyer, _token, _amount, _fee));
         require(!escrows[_orderHash].exists, "Order already exists");
 
         uint256 amount = _fee + _amount;
@@ -118,18 +118,22 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @notice Updates the arbitrator
     /// @param _arbitrator Address of the arbitrator
     function setArbitrator(address _arbitrator) public onlyOwner {
+        require(_arbitrator != address(0), "Invalid arbitrator");
         arbitrator = _arbitrator;
     }
 
     /// @notice Updates the fee recipient
     /// @param _feeRecipient Address of the arbitrator
     function setFeeRecipient(address payable _feeRecipient) public onlyOwner {
+        require(_feeRecipient != address(0), "Invalid fee recipient");
         feeRecipient = _feeRecipient;
     }
 
     /// @notice Updates the fee
     /// @param _fee fee amount (bps)
     function setFee(uint256 _fee) public onlyOwner {
+        require(_fee <= 100);
+
         fee = _fee;
     }
 
@@ -142,12 +146,14 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @notice Updates the forwarder
     /// @param trustedForwarder biconomy forwarder
     function setTrustedForwarder(address trustedForwarder) external onlyOwner {
+        require(trustedForwarder != address(0), "Invalid trust forwarder");
         _trustedForwarder = trustedForwarder;
     }
 
     /// @notice Updates the implementation
     /// @param _implementation Address of the implementation
     function setImplementation(address payable _implementation) public onlyOwner {
+        require(_implementation != address(0), "Invalid implementation");
         implementation = _implementation;
     }
 

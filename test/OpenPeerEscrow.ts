@@ -1,17 +1,13 @@
 import { expect } from 'chai';
 import { BigNumber, constants, VoidSigner } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
+
 import { loadFixture, time } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
-import {
-  ERC20,
-  OpenPeerEscrow,
-  OpenPeerEscrowsDeployer,
-  Token
-} from '../typechain-types';
+import { ERC20, OpenPeerEscrow, OpenPeerEscrowsDeployer, Token } from '../typechain-types';
 import { OpenPeerEscrowProps } from '../types/OpenPeerEscrow.types';
-import { formatBytes32String, parseBytes32String, parseUnits } from 'ethers/lib/utils';
 import { generateTradeHash } from './utils';
 
 const DISPUTE_FEE = constants.WeiPerEther;
@@ -105,7 +101,7 @@ describe('OpenPeerEscrow', () => {
       buyerAddress: buyerAccount.address,
       tokenAddress,
       amount,
-      fee
+      fee: bpsFee.toString()
     });
     const [_, address] = await deployer.escrows(tradeHash);
     const OpenPeerEscrow = await ethers.getContractFactory('OpenPeerEscrow');

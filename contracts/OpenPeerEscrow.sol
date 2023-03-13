@@ -46,6 +46,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         require(_buyer != _seller, "Seller and buyer must be different");
         require(_seller != address(0), "Invalid seller");
         require(_buyer != address(0), "Invalid buyer");
+        require(_feeRecipient != address(0), "Invalid fee recipient");
+        require(_arbitrator != address(0), "Invalid arbitrator");
 
         seller = _seller;
         token = _token;

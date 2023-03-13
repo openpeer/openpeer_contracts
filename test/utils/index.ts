@@ -1,5 +1,6 @@
-import { defaultAbiCoder } from '@ethersproject/abi';
 import { keccak256, solidityPack } from 'ethers/lib/utils';
+
+import { defaultAbiCoder } from '@ethersproject/abi';
 
 export const generateTradeHash = ({
   orderID,

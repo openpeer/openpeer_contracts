@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { BigNumber, constants } from 'ethers';
+import { constants } from 'ethers';
 import { ethers } from 'hardhat';
 
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
@@ -117,7 +117,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: owner.address,
           tokenAddress: constants.AddressZero,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
         await deployer.deployNativeEscrow(tradeHash, owner.address, '1000', {
           value: '1003'
@@ -138,14 +138,14 @@ describe('OpenPeerEscrowsDeployer', () => {
 
     it('Should update the fee recipient', async () => {
       expect(await deployer.feeRecipient()).to.equal(feeRecipient.address);
-      await deployer.setFeeRecipient(constants.AddressZero);
-      expect(await deployer.feeRecipient()).to.equal(constants.AddressZero);
+      await deployer.setFeeRecipient(owner.address);
+      expect(await deployer.feeRecipient()).to.equal(owner.address);
     });
 
     it('Should update the arbitrator', async () => {
       expect(await deployer.arbitrator()).to.equal(arbitrator.address);
-      await deployer.setArbitrator(constants.AddressZero);
-      expect(await deployer.arbitrator()).to.equal(constants.AddressZero);
+      await deployer.setArbitrator(owner.address);
+      expect(await deployer.arbitrator()).to.equal(owner.address);
     });
   });
 
@@ -161,7 +161,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: buyer,
           tokenAddress: constants.AddressZero,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
 
         await expect(
@@ -181,7 +181,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: buyer,
           tokenAddress: constants.AddressZero,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
         const [exists, _] = await deployer.escrows(tradeHash);
         expect(exists).to.be.true;
@@ -211,7 +211,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: buyer,
           tokenAddress: constants.AddressZero,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
 
         const [_, escrow] = await deployer.escrows(tradeHash);
@@ -227,7 +227,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: buyer,
           tokenAddress: erc20.address,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
         await expect(deployer.deployERC20Escrow(orderID, buyer, erc20.address, '1000'))
           .to.emit(deployer, 'EscrowCreated')
@@ -242,7 +242,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: buyer,
           tokenAddress: erc20.address,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
         const [exists, _] = await deployer.escrows(tradeHash);
         expect(exists).to.be.true;
@@ -263,7 +263,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           buyerAddress: buyer,
           tokenAddress: erc20.address,
           amount: '1000',
-          fee: '30'
+          fee: '3'
         });
 
         const [_, escrow] = await deployer.escrows(tradeHash);
