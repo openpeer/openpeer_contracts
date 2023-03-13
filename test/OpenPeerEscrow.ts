@@ -11,7 +11,8 @@ import {
   Token
 } from '../typechain-types';
 import { OpenPeerEscrowProps } from '../types/OpenPeerEscrow.types';
-import { parseUnits } from 'ethers/lib/utils';
+import { formatBytes32String, parseBytes32String, parseUnits } from 'ethers/lib/utils';
+import { generateTradeHash } from './utils';
 
 const DISPUTE_FEE = constants.WeiPerEther;
 
@@ -75,6 +76,11 @@ describe('OpenPeerEscrow', () => {
     let tokenAddress = token;
     let erc20Contract: Token | undefined;
 
+    const bpsFee = BigNumber.from(amount)
+      .mul(BigNumber.from(fee))
+      .div(BigNumber.from('10000'));
+    const amountWithFee = BigNumber.from(amount).add(bpsFee).toString();
+
     if (useERC20) {
       const Token = await ethers.getContractFactory('Token');
       erc20Contract = await Token.deploy();
@@ -87,16 +93,21 @@ describe('OpenPeerEscrow', () => {
         amount
       );
     } else {
-      const bpsFee = BigNumber.from(amount)
-        .mul(BigNumber.from(fee))
-        .div(BigNumber.from('10000'));
-      const amountWithFee = BigNumber.from(amount).add(bpsFee).toString();
       await deployer.deployNativeEscrow(orderID, buyerAccount.address, amount, {
         value: amountWithFee
       });
     }
 
-    const [_, address] = await deployer.escrows(orderID);
+    const [seller] = await ethers.getSigners();
+    const tradeHash = generateTradeHash({
+      orderID,
+      sellerAddress: seller.address,
+      buyerAddress: buyerAccount.address,
+      tokenAddress,
+      amount,
+      fee
+    });
+    const [_, address] = await deployer.escrows(tradeHash);
     const OpenPeerEscrow = await ethers.getContractFactory('OpenPeerEscrow');
     const escrow = OpenPeerEscrow.attach(address);
 

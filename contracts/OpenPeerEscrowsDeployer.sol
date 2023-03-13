@@ -7,6 +7,7 @@ import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
 import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
 import { Ownable } from "./libs/Ownable.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
+import "hardhat/console.sol";
 
 contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     using SafeERC20 for IERC20;
@@ -28,15 +29,11 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /**********************
     +   Events            +
     ***********************/
-    event EscrowCreated(bytes32 _orderID, Escrow _escrow);
+    event EscrowCreated(bytes32 _tradeId, Escrow _escrow);
 
     struct Escrow {
         bool exists;
         address deployment;
-        address seller;
-        address buyer;
-        address token;
-        uint256 amount;
     }
 
     /// @notice Settings
@@ -81,15 +78,17 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     }
 
     function deploy(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) private {
-        require(!escrows[_orderID].exists, "Order already exists");
+        uint256 _fee = (_amount * fee / 10_000);
+        bytes32 _orderHash = keccak256(abi.encodePacked(_orderID, _msgSender(), _buyer, _token, _amount, fee));
+        require(!escrows[_orderHash].exists, "Order already exists");
 
-        uint256 amount = (_amount * fee / 10_000) + _amount;
+        uint256 amount = _fee + _amount;
 
         if (_token == address(0)) {
             require(msg.value == amount, "Incorrect MATIC sent");
         }
 
-        address deployment = Clones.cloneDeterministic(implementation, _orderID);
+        address deployment = Clones.cloneDeterministic(implementation, _orderHash);
         OpenPeerEscrow(payable(deployment)).initialize(payable(_msgSender()),
                                                        _buyer,
                                                        _token,
@@ -108,9 +107,9 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
             require((balanceAfter - balanceBefore) == amount, "Wrong ERC20 amount");
         }
 
-        Escrow memory escrow = Escrow(true, deployment, _msgSender(), _buyer, _token, _amount);
-        escrows[_orderID] = escrow;
-        emit EscrowCreated(_orderID, escrow);
+        Escrow memory escrow = Escrow(true, deployment);
+        escrows[_orderHash] = escrow;
+        emit EscrowCreated(_orderHash, escrow);
     }
 
     /***********************
