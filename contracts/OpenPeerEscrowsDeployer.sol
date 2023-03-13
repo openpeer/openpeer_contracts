@@ -7,7 +7,6 @@ import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
 import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
 import { Ownable } from "./libs/Ownable.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
-import "hardhat/console.sol";
 
 contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     using SafeERC20 for IERC20;
