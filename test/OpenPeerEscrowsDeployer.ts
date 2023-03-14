@@ -5,7 +5,7 @@ import { ethers } from 'hardhat';
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
-import { OpenPeerEscrowsDeployer, Token } from '../typechain-types';
+import { NFT, OpenPeerEscrowsDeployer, Token } from '../typechain-types';
 import { generateTradeHash } from './utils';
 
 describe('OpenPeerEscrowsDeployer', () => {
@@ -46,6 +46,7 @@ describe('OpenPeerEscrowsDeployer', () => {
       feeRecipient.address,
       fee,
       sellerWaitingTime,
+      constants.AddressZero,
       constants.AddressZero
     );
 
@@ -116,8 +117,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: owner.address,
           tokenAddress: constants.AddressZero,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
         await deployer.deployNativeEscrow(tradeHash, owner.address, '1000', {
           value: '1003'
@@ -149,6 +149,31 @@ describe('OpenPeerEscrowsDeployer', () => {
     });
   });
 
+  describe('Fees', () => {
+    const deployNFT = async () => {
+      const NFTDeployer = await ethers.getContractFactory('NFT');
+      const nft: NFT = await NFTDeployer.deploy();
+      return { nft };
+    };
+
+    beforeEach(async () => {
+      const { nft } = await loadFixture(deployNFT);
+      await deployer.setFeeDiscountNFT(nft.address);
+    });
+
+    describe('With the fees discount NFT', () => {
+      it('Should return fee with a 50% discount', async () => {
+        expect(await deployer.fee()).to.equal(fee / 2);
+      });
+    });
+
+    describe('Without the fees discount NFT', () => {
+      it('Should return fee without discounts', async () => {
+        expect(await deployer.connect(arbitrator).fee()).to.equal(fee);
+      });
+    });
+  });
+
   describe('Escrow', () => {
     const buyer = '0xad0637645341A160c4621a5AE22A709fECA37234';
     const orderID = ethers.utils.formatBytes32String('1');
@@ -160,8 +185,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: buyer,
           tokenAddress: constants.AddressZero,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
 
         await expect(
@@ -180,8 +204,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: buyer,
           tokenAddress: constants.AddressZero,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
         const [exists, _] = await deployer.escrows(tradeHash);
         expect(exists).to.be.true;
@@ -210,8 +233,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: buyer,
           tokenAddress: constants.AddressZero,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
 
         const [_, escrow] = await deployer.escrows(tradeHash);
@@ -226,8 +248,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: buyer,
           tokenAddress: erc20.address,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
         await expect(deployer.deployERC20Escrow(orderID, buyer, erc20.address, '1000'))
           .to.emit(deployer, 'EscrowCreated')
@@ -241,8 +262,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: buyer,
           tokenAddress: erc20.address,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
         const [exists, _] = await deployer.escrows(tradeHash);
         expect(exists).to.be.true;
@@ -262,8 +282,7 @@ describe('OpenPeerEscrowsDeployer', () => {
           sellerAddress: owner.address,
           buyerAddress: buyer,
           tokenAddress: erc20.address,
-          amount: '1000',
-          fee: '3'
+          amount: '1000'
         });
 
         const [_, escrow] = await deployer.escrows(tradeHash);

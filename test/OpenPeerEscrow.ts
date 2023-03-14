@@ -6,7 +6,12 @@ import { ethers } from 'hardhat';
 import { loadFixture, time } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
-import { ERC20, OpenPeerEscrow, OpenPeerEscrowsDeployer, Token } from '../typechain-types';
+import {
+  ERC20,
+  OpenPeerEscrow,
+  OpenPeerEscrowsDeployer,
+  Token
+} from '../typechain-types';
 import { OpenPeerEscrowProps } from '../types/OpenPeerEscrow.types';
 import { generateTradeHash } from './utils';
 
@@ -49,6 +54,7 @@ describe('OpenPeerEscrow', () => {
       feeRecipient.address,
       fee,
       sellerWaitingTime,
+      constants.AddressZero,
       constants.AddressZero
     );
 
@@ -100,8 +106,7 @@ describe('OpenPeerEscrow', () => {
       sellerAddress: seller.address,
       buyerAddress: buyerAccount.address,
       tokenAddress,
-      amount,
-      fee: bpsFee.toString()
+      amount
     });
     const [_, address] = await deployer.escrows(tradeHash);
     const OpenPeerEscrow = await ethers.getContractFactory('OpenPeerEscrow');
