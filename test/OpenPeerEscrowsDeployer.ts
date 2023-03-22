@@ -46,7 +46,7 @@ describe('OpenPeerEscrowsDeployer', () => {
       feeRecipient.address,
       fee,
       sellerWaitingTime,
-      constants.AddressZero,
+      '0x69015912AA33720b842dCD6aC059Ed623F28d9f7',
       constants.AddressZero
     );
 
@@ -83,7 +83,8 @@ describe('OpenPeerEscrowsDeployer', () => {
             '30',
             arbitrator.address,
             feeRecipient.address,
-            sellerWaitingTime
+            sellerWaitingTime,
+            '0xf0511f123164602042ab2bCF02111fA5D3Fe97CD'
           )
       ).to.be.revertedWith('Initializable: contract is already initialized');
     });
@@ -162,8 +163,8 @@ describe('OpenPeerEscrowsDeployer', () => {
     });
 
     describe('With the fees discount NFT', () => {
-      it('Should return fee with a 50% discount', async () => {
-        expect(await deployer.fee()).to.equal(fee / 2);
+      it('Should return fee with a 100% discount', async () => {
+        expect(await deployer.fee()).to.equal(constants.Zero);
       });
     });
 

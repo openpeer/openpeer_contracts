@@ -32,6 +32,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
     /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
+    /// @param trustedForwarder Forwarder address
     function initialize(
         address payable _seller,
         address payable _buyer,
@@ -40,7 +41,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         uint256 _fee,
         address _arbitrator,
         address payable _feeRecipient,
-        uint32 _sellerWaitingTime
+        uint32 _sellerWaitingTime,
+        address trustedForwarder
     ) external virtual initializer {
         require(_amount > 0, "Invalid amount");
         require(_buyer != _seller, "Seller and buyer must be different");
@@ -48,6 +50,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         require(_buyer != address(0), "Invalid buyer");
         require(_feeRecipient != address(0), "Invalid fee recipient");
         require(_arbitrator != address(0), "Invalid arbitrator");
+        require(trustedForwarder != address(0), "Invalid trust forwarder");
 
         seller = _seller;
         token = _token;
@@ -58,6 +61,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         feeRecipient = _feeRecipient;
         sellerWaitingTime = _sellerWaitingTime;
         sellerCanCancelAfter = uint32(block.timestamp) + sellerWaitingTime;
+        _trustedForwarder = trustedForwarder;
+
     }
 
     // Events

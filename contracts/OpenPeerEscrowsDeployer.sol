@@ -46,7 +46,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @param fee_ OP fee (bps) ex: 30 == 0.3%
     /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
     /// @param _trustedForwarder Forwarder address
-    /// @param _feeDiscountNFT Forwarder address
+    /// @param _feeDiscountNFT NFT contract for fee discounts
     constructor (
         address _arbitrator,
         address payable _feeRecipient,
@@ -103,7 +103,8 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
                                                        userFee,
                                                        arbitrator,
                                                        feeRecipient,
-                                                       sellerWaitingTime);
+                                                       sellerWaitingTime,
+                                                       _trustedForwarder);
         if (_token == address(0)) {
             (bool sent,) = deployment.call{value: amount}("");
             require(sent, "Failed to send MATIC");
@@ -188,7 +189,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         IERC721 discountNFT = IERC721(feeDiscountNFT);
 
         if (feeDiscountNFT != address(0) && discountNFT.balanceOf(_msgSender()) > 0) {
-          return _fee / 2;
+          return 0;
         }
 
         return _fee;
