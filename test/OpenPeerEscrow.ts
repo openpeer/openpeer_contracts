@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import { BigNumber, constants, VoidSigner } from 'ethers';
+import { parseUnits } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
+
 import { loadFixture, time } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
@@ -11,7 +13,7 @@ import {
   Token
 } from '../typechain-types';
 import { OpenPeerEscrowProps } from '../types/OpenPeerEscrow.types';
-import { parseUnits } from 'ethers/lib/utils';
+import { generateTradeHash } from './utils';
 
 const DISPUTE_FEE = constants.WeiPerEther;
 
@@ -52,6 +54,7 @@ describe('OpenPeerEscrow', () => {
       feeRecipient.address,
       fee,
       sellerWaitingTime,
+      '0x69015912AA33720b842dCD6aC059Ed623F28d9f7',
       constants.AddressZero
     );
 
@@ -75,6 +78,11 @@ describe('OpenPeerEscrow', () => {
     let tokenAddress = token;
     let erc20Contract: Token | undefined;
 
+    const bpsFee = BigNumber.from(amount)
+      .mul(BigNumber.from(fee))
+      .div(BigNumber.from('10000'));
+    const amountWithFee = BigNumber.from(amount).add(bpsFee).toString();
+
     if (useERC20) {
       const Token = await ethers.getContractFactory('Token');
       erc20Contract = await Token.deploy();
@@ -87,16 +95,20 @@ describe('OpenPeerEscrow', () => {
         amount
       );
     } else {
-      const bpsFee = BigNumber.from(amount)
-        .mul(BigNumber.from(fee))
-        .div(BigNumber.from('10000'));
-      const amountWithFee = BigNumber.from(amount).add(bpsFee).toString();
       await deployer.deployNativeEscrow(orderID, buyerAccount.address, amount, {
         value: amountWithFee
       });
     }
 
-    const [_, address] = await deployer.escrows(orderID);
+    const [seller] = await ethers.getSigners();
+    const tradeHash = generateTradeHash({
+      orderID,
+      sellerAddress: seller.address,
+      buyerAddress: buyerAccount.address,
+      tokenAddress,
+      amount
+    });
+    const [_, address] = await deployer.escrows(tradeHash);
     const OpenPeerEscrow = await ethers.getContractFactory('OpenPeerEscrow');
     const escrow = OpenPeerEscrow.attach(address);
 

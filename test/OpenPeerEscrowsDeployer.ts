@@ -1,11 +1,12 @@
 import { expect } from 'chai';
-import { BigNumber, constants } from 'ethers';
+import { constants } from 'ethers';
 import { ethers } from 'hardhat';
 
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
-import { OpenPeerEscrowsDeployer, Token } from '../typechain-types';
+import { NFT, OpenPeerEscrowsDeployer, Token } from '../typechain-types';
+import { generateTradeHash } from './utils';
 
 describe('OpenPeerEscrowsDeployer', () => {
   let deployer: OpenPeerEscrowsDeployer;
@@ -45,6 +46,7 @@ describe('OpenPeerEscrowsDeployer', () => {
       feeRecipient.address,
       fee,
       sellerWaitingTime,
+      '0x69015912AA33720b842dCD6aC059Ed623F28d9f7',
       constants.AddressZero
     );
 
@@ -81,7 +83,8 @@ describe('OpenPeerEscrowsDeployer', () => {
             '30',
             arbitrator.address,
             feeRecipient.address,
-            sellerWaitingTime
+            sellerWaitingTime,
+            '0xf0511f123164602042ab2bCF02111fA5D3Fe97CD'
           )
       ).to.be.revertedWith('Initializable: contract is already initialized');
     });
@@ -110,11 +113,18 @@ describe('OpenPeerEscrowsDeployer', () => {
 
       it('Should revert with an already deployed order', async () => {
         const orderID = ethers.utils.formatBytes32String('1');
-        await deployer.deployNativeEscrow(orderID, owner.address, '1000', {
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: owner.address,
+          tokenAddress: constants.AddressZero,
+          amount: '1000'
+        });
+        await deployer.deployNativeEscrow(tradeHash, owner.address, '1000', {
           value: '1003'
         });
         await expect(
-          deployer.deployNativeEscrow(orderID, feeRecipient.address, '1000', {
+          deployer.deployNativeEscrow(tradeHash, owner.address, '1000', {
             value: '1003'
           })
         ).to.be.revertedWith('Order already exists');
@@ -129,14 +139,39 @@ describe('OpenPeerEscrowsDeployer', () => {
 
     it('Should update the fee recipient', async () => {
       expect(await deployer.feeRecipient()).to.equal(feeRecipient.address);
-      await deployer.setFeeRecipient(constants.AddressZero);
-      expect(await deployer.feeRecipient()).to.equal(constants.AddressZero);
+      await deployer.setFeeRecipient(owner.address);
+      expect(await deployer.feeRecipient()).to.equal(owner.address);
     });
 
     it('Should update the arbitrator', async () => {
       expect(await deployer.arbitrator()).to.equal(arbitrator.address);
-      await deployer.setArbitrator(constants.AddressZero);
-      expect(await deployer.arbitrator()).to.equal(constants.AddressZero);
+      await deployer.setArbitrator(owner.address);
+      expect(await deployer.arbitrator()).to.equal(owner.address);
+    });
+  });
+
+  describe('Fees', () => {
+    const deployNFT = async () => {
+      const NFTDeployer = await ethers.getContractFactory('NFT');
+      const nft: NFT = await NFTDeployer.deploy();
+      return { nft };
+    };
+
+    beforeEach(async () => {
+      const { nft } = await loadFixture(deployNFT);
+      await deployer.setFeeDiscountNFT(nft.address);
+    });
+
+    describe('With the fees discount NFT', () => {
+      it('Should return fee with a 100% discount', async () => {
+        expect(await deployer.fee()).to.equal(constants.Zero);
+      });
+    });
+
+    describe('Without the fees discount NFT', () => {
+      it('Should return fee without discounts', async () => {
+        expect(await deployer.connect(arbitrator).fee()).to.equal(fee);
+      });
     });
   });
 
@@ -146,30 +181,34 @@ describe('OpenPeerEscrowsDeployer', () => {
 
     describe('Native token', () => {
       it('Should emit a EscrowCreated event', async () => {
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: buyer,
+          tokenAddress: constants.AddressZero,
+          amount: '1000'
+        });
+
         await expect(
           deployer.deployNativeEscrow(orderID, buyer, '1000', { value: '1003' })
         )
           .to.emit(deployer, 'EscrowCreated')
-          .withArgs(
-            orderID,
-            ([exists, _, sellerAddress, buyerAddress, token, amount]: any) =>
-              exists &&
-              sellerAddress === owner.address &&
-              buyerAddress === buyer &&
-              token === constants.AddressZero &&
-              BigNumber.from('1000').eq(amount)
-          );
+          .withArgs(tradeHash, ([exists]: any) => exists);
       });
 
       it('Should be available in the escrows list', async () => {
-        await deployer.deployNativeEscrow(orderID, buyer, '1000', { value: '1003' });
-        const [exists, _, sellerAddress, buyerAddress, token, amount] =
-          await deployer.escrows(orderID);
+        await deployer.deployNativeEscrow(orderID, buyer, '1000', {
+          value: '1003'
+        });
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: buyer,
+          tokenAddress: constants.AddressZero,
+          amount: '1000'
+        });
+        const [exists, _] = await deployer.escrows(tradeHash);
         expect(exists).to.be.true;
-        expect(sellerAddress).to.be.eq(owner.address);
-        expect(buyerAddress).to.be.eq(buyer);
-        expect(token).to.be.eq(constants.AddressZero);
-        expect(amount).to.be.eq(BigNumber.from('1000'));
       });
 
       it('Should revert with a smaller amount', async () => {
@@ -190,35 +229,44 @@ describe('OpenPeerEscrowsDeployer', () => {
           [0, -1003, 0, 0]
         );
 
-        const [_, escrow] = await deployer.escrows(orderID);
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: buyer,
+          tokenAddress: constants.AddressZero,
+          amount: '1000'
+        });
+
+        const [_, escrow] = await deployer.escrows(tradeHash);
         expect(await ethers.provider.getBalance(escrow)).to.eq('1003');
       });
     });
 
     describe('ERC20 tokens', () => {
       it('Should emit a EscrowCreated event', async () => {
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: buyer,
+          tokenAddress: erc20.address,
+          amount: '1000'
+        });
         await expect(deployer.deployERC20Escrow(orderID, buyer, erc20.address, '1000'))
           .to.emit(deployer, 'EscrowCreated')
-          .withArgs(
-            orderID,
-            ([exists, _, sellerAddress, buyerAddress, token, amount]: any) =>
-              exists &&
-              sellerAddress === owner.address &&
-              buyerAddress === buyer &&
-              token === erc20.address &&
-              BigNumber.from('1000').eq(amount)
-          );
+          .withArgs(tradeHash, ([exists]: any) => exists);
       });
 
       it('Should be available in the escrows list', async () => {
         await deployer.deployERC20Escrow(orderID, buyer, erc20.address, '1000');
-        const [exists, _, sellerAddress, buyerAddress, token, amount] =
-          await deployer.escrows(orderID);
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: buyer,
+          tokenAddress: erc20.address,
+          amount: '1000'
+        });
+        const [exists, _] = await deployer.escrows(tradeHash);
         expect(exists).to.be.true;
-        expect(sellerAddress).to.be.eq(owner.address);
-        expect(buyerAddress).to.be.eq(buyer);
-        expect(token).to.be.eq(erc20.address);
-        expect(amount).to.be.eq(BigNumber.from('1000'));
       });
 
       it('Should transfer funds to the escrow contract', async () => {
@@ -230,7 +278,15 @@ describe('OpenPeerEscrowsDeployer', () => {
           [0, -1003, 0, 0]
         );
 
-        const [_, escrow] = await deployer.escrows(orderID);
+        const tradeHash = generateTradeHash({
+          orderID,
+          sellerAddress: owner.address,
+          buyerAddress: buyer,
+          tokenAddress: erc20.address,
+          amount: '1000'
+        });
+
+        const [_, escrow] = await deployer.escrows(tradeHash);
         expect(await erc20.balanceOf(escrow)).to.eq('1003');
       });
     });
