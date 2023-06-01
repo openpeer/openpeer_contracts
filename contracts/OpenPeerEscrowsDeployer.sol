@@ -2,25 +2,21 @@
 pragma solidity ^0.8.17;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { IERC721 } from "@openzeppelin/contracts/interfaces/IERC721.sol";
 import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
+import { IERC721 } from "@openzeppelin/contracts/interfaces/IERC721.sol";
 import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
 import { Ownable } from "./libs/Ownable.sol";
-import { ERC2771Context } from "./libs/ERC2771Context.sol";
 
 contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
-    using SafeERC20 for IERC20;
-
-    mapping (bytes32 => Escrow) public escrows;
+    mapping (address => address) public sellerContracts;
 
     /***********************
     +   Global settings   +
     ***********************/
     address public arbitrator;
     address payable public feeRecipient;
-    uint256 private _fee;
+    uint256 private fee;
     uint32 public sellerWaitingTime;
 
     bool public stopped;
@@ -33,31 +29,26 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /**********************
     +   Events            +
     ***********************/
-    event EscrowCreated(bytes32 _tradeId, Escrow _escrow);
-
-    struct Escrow {
-        bool exists;
-        address deployment;
-    }
+    event ContractCreated(address _seller, address _deployment);
 
     /// @notice Settings
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
-    /// @param fee_ OP fee (bps) ex: 30 == 0.3%
+    /// @param _fee OP fee (bps) ex: 30 == 0.3%
     /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
     /// @param _trustedForwarder Forwarder address
     /// @param _feeDiscountNFT NFT contract for fee discounts
     constructor (
         address _arbitrator,
         address payable _feeRecipient,
-        uint256 fee_,
+        uint256 _fee,
         uint32 _sellerWaitingTime,
         address _trustedForwarder,
         address _feeDiscountNFT
     ) ERC2771Context(_trustedForwarder) {
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
-        _fee = fee_;
+        fee = _fee;
         sellerWaitingTime = _sellerWaitingTime;
         feeDiscountNFT = _feeDiscountNFT;
         implementation = address(new OpenPeerEscrow(_trustedForwarder));
@@ -76,48 +67,19 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         }
     }
 
-    function deployNativeEscrow(bytes32 _orderID, address payable _buyer, uint256 _amount) external payable stopInEmergency {
-        deploy(_orderID, _buyer, address(0), _amount);
-    }
-
-    function deployERC20Escrow(bytes32 _orderID, address payable _buyer, address _token,  uint256 _amount) external stopInEmergency {
-        deploy(_orderID, _buyer, _token, _amount);
-    }
-
-    function deploy(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) private {
-        bytes32 _orderHash = keccak256(abi.encodePacked(_orderID, _msgSender(), _buyer, _token, _amount));
-        require(!escrows[_orderHash].exists, "Order already exists");
-
-        uint256 userFee = fee();
-        uint256 amount = (_amount * userFee / 10_000) + _amount;
-
-        if (_token == address(0)) {
-            require(msg.value == amount, "Incorrect MATIC sent");
-        }
-
-        address deployment = Clones.cloneDeterministic(implementation, _orderHash);
+    function deploy() external returns (address) {
+        address deployment = Clones.cloneDeterministic(implementation, keccak256(abi.encodePacked(_msgSender())));
         OpenPeerEscrow(payable(deployment)).initialize(payable(_msgSender()),
-                                                       _buyer,
-                                                       _token,
-                                                       _amount,
-                                                       userFee,
-                                                       arbitrator,
-                                                       feeRecipient,
-                                                       sellerWaitingTime,
-                                                       _trustedForwarder);
-        if (_token == address(0)) {
-            (bool sent,) = deployment.call{value: amount}("");
-            require(sent, "Failed to send MATIC");
-        } else {
-            uint256 balanceBefore = IERC20(_token).balanceOf(deployment);
-            IERC20(_token).safeTransferFrom(_msgSender(), deployment, amount);
-            uint256 balanceAfter = IERC20(_token).balanceOf(deployment);
-            require((balanceAfter - balanceBefore) == amount, "Wrong ERC20 amount");
-        }
+                                                              fee,
+                                                              arbitrator,
+                                                              feeRecipient,
+                                                              sellerWaitingTime,
+                                                              _trustedForwarder,
+                                                              feeDiscountNFT);
+        sellerContracts[_msgSender()] = deployment;
+        emit ContractCreated(_msgSender(), deployment);
 
-        Escrow memory escrow = Escrow(true, deployment);
-        escrows[_orderHash] = escrow;
-        emit EscrowCreated(_orderHash, escrow);
+        return deployment;
     }
 
     /***********************
@@ -139,11 +101,11 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     }
 
     /// @notice Updates the fee
-    /// @param fee_ fee amount (bps)
-    function setFee(uint256 fee_) public onlyOwner {
-        require(fee_ <= 100);
+    /// @param _fee fee amount (bps)
+    function setFee(uint256 _fee) public onlyOwner {
+        require(_fee <= 100);
 
-        _fee = fee_;
+        fee = _fee;
     }
 
     /// @notice Updates the seller cancelation time
@@ -185,13 +147,13 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     +   Getters           +
     ***********************/
 
-    function fee() public view returns (uint256) {
+    function sellerFee() public view returns (uint256) {
         IERC721 discountNFT = IERC721(feeDiscountNFT);
 
         if (feeDiscountNFT != address(0) && discountNFT.balanceOf(_msgSender()) > 0) {
           return 0;
         }
 
-        return _fee;
+        return fee;
     }
 }
