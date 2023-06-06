@@ -68,7 +68,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     }
 
     function deploy() external returns (address) {
-        address deployment = Clones.cloneDeterministic(implementation, keccak256(abi.encodePacked(_msgSender())));
+        address deployment = Clones.clone(implementation);
         OpenPeerEscrow(payable(deployment)).initialize(payable(_msgSender()),
                                                               fee,
                                                               arbitrator,

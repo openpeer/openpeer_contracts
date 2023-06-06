@@ -167,7 +167,7 @@ describe('OpenPeerEscrow', () => {
           escrow.createNativeEscrow(orderID, buyer.address, '1000', { value: '1003' })
         )
           .to.emit(escrow, 'EscrowCreated')
-          .withArgs(tradeHash, ([exists]: any) => exists);
+          .withArgs(tradeHash);
       });
 
       it('Should be available in the escrows list', async () => {
@@ -264,7 +264,7 @@ describe('OpenPeerEscrow', () => {
           escrow.createERC20Escrow(orderID, buyer.address, erc20.address, '1000')
         )
           .to.emit(escrow, 'EscrowCreated')
-          .withArgs(tradeHash, ([exists]: any) => exists);
+          .withArgs(tradeHash);
       });
 
       it('Should be available in the escrows list', async () => {

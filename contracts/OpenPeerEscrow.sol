@@ -23,7 +23,13 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /**********************
     +   Events            +
     ***********************/
-    event EscrowCreated(bytes32 _tradeId, Escrow _escrow);
+    event EscrowCreated(bytes32 indexed _orderHash);
+    event Released(bytes32 indexed _orderHash);
+    event CancelledByBuyer(bytes32 indexed _orderHash);
+    event SellerCancelDisabled(bytes32 indexed _orderHash);
+    event CancelledBySeller(bytes32 indexed _orderHash);
+    event DisputeOpened(bytes32 indexed _orderHash, address indexed _sender);
+    event DisputeResolved(bytes32 indexed _orderHash, address indexed _winner);
 
     struct Escrow {
         // So we know the escrow exists
@@ -70,14 +76,6 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         feeDiscountNFT = _feeDiscountNFT;
     }
 
-    // Events
-    event Released(bytes32 indexed _orderHash);
-    event CancelledByBuyer(bytes32 indexed _orderHash);
-    event SellerCancelDisabled(bytes32 indexed _orderHash);
-    event CancelledBySeller(bytes32 indexed _orderHash);
-    event DisputeOpened(bytes32 indexed _orderHash, address _sender);
-    event DisputeResolved(bytes32 indexed _orderHash, address _winner);
-
     // Modifiers
     modifier onlySeller() {
         require(_msgSender() == seller, "Must be seller");
@@ -122,7 +120,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
 
         Escrow memory escrow = Escrow(true, uint32(block.timestamp) + sellerWaitingTime, orderFee, false);
         escrows[_orderHash] = escrow;
-        emit EscrowCreated(_orderHash, escrow);
+        emit EscrowCreated(_orderHash);
     }
 
     /// @notice Disable the seller from cancelling

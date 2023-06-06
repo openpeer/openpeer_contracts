@@ -178,5 +178,14 @@ describe('OpenPeerEscrowsDeployer', () => {
       const address = await deployer.sellerContracts(owner.address);
       expect(!!address).to.be.true;
     });
+
+    describe('Multiple contracts per seller', () => {
+      it('Should create a second contract for the same seller', async () => {
+        await deployer.deploy();
+        await deployer.deploy();
+        const address = await deployer.sellerContracts(owner.address);
+        expect(!!address).to.be.true;
+      });
+    });
   });
 });
