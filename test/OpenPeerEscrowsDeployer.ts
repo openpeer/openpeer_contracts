@@ -56,7 +56,7 @@ describe('OpenPeerEscrowsDeployer', () => {
       expect(await deployer.owner()).to.be.equal(owner.address);
       expect(await deployer.arbitrator()).to.be.equal(arbitrator.address);
       expect(await deployer.feeRecipient()).to.be.equal(feeRecipient.address);
-      expect(await deployer.sellerFee()).to.be.equal(fee);
+      expect(await deployer.sellerFee(constants.AddressZero)).to.be.equal(fee);
       expect(await deployer.sellerWaitingTime()).to.be.equal(sellerWaitingTime);
     });
 
@@ -123,9 +123,9 @@ describe('OpenPeerEscrowsDeployer', () => {
     });
 
     it('Should update the fee', async () => {
-      expect(await deployer.sellerFee()).to.equal(30);
+      expect(await deployer.sellerFee(constants.AddressZero)).to.equal(30);
       await deployer.setFee(15);
-      expect(await deployer.sellerFee()).to.equal(15);
+      expect(await deployer.sellerFee(constants.AddressZero)).to.equal(15);
     });
 
     it('Should update the fee recipient', async () => {
@@ -148,20 +148,61 @@ describe('OpenPeerEscrowsDeployer', () => {
       return { nft };
     };
 
-    beforeEach(async () => {
-      const { nft } = await loadFixture(deployNFT);
-      await deployer.setFeeDiscountNFT(nft.address);
-    });
-
     describe('With the fees discount NFT', () => {
+      beforeEach(async () => {
+        const { nft } = await loadFixture(deployNFT);
+        await deployer.setFeeDiscountNFT(nft.address);
+      });
+
       it('Should return fee with a 100% discount', async () => {
-        expect(await deployer.sellerFee()).to.equal(constants.Zero);
+        expect(await deployer.sellerFee(constants.AddressZero)).to.equal(constants.Zero);
       });
     });
 
     describe('Without the fees discount NFT', () => {
       it('Should return fee without discounts', async () => {
-        expect(await deployer.connect(arbitrator).sellerFee()).to.equal(fee);
+        expect(
+          await deployer.connect(arbitrator).sellerFee(constants.AddressZero)
+        ).to.equal(fee);
+      });
+    });
+
+    describe('With a seller fee', () => {
+      it('Should return fee with the seller fee', async () => {
+        await deployer.updatePartnerFeeBps([owner.address], [50]);
+        // OP fee + seller fee
+        expect(await deployer.sellerFee(owner.address)).to.equal(50 + fee);
+      });
+    });
+
+    describe('Updating the partner fees', () => {
+      it('Should revert with non owner tries to update the partner fees', async () => {
+        await expect(
+          deployer.connect(arbitrator).updatePartnerFeeBps([owner.address], [50])
+        ).to.be.revertedWith('Ownable: caller is not the owner');
+      });
+
+      it('Should revert with different array lengths', async () => {
+        await expect(
+          deployer.updatePartnerFeeBps([owner.address], [50, 50])
+        ).to.be.revertedWith('Invalid input');
+      });
+
+      it('Should revert with invalid fee', async () => {
+        await expect(
+          deployer.updatePartnerFeeBps([owner.address], [101])
+        ).to.be.revertedWith('Invalid fee bps');
+      });
+
+      it('Should revert with invalid address', async () => {
+        await expect(
+          deployer.updatePartnerFeeBps([constants.AddressZero], [50])
+        ).to.be.revertedWith('Invalid partner address');
+      });
+
+      it('Should update the partner fees', async () => {
+        await deployer.updatePartnerFeeBps([owner.address], [50]);
+        expect(await deployer.partnerFeeBps(owner.address)).to.equal(50);
       });
     });
   });

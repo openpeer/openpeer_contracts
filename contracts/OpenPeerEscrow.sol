@@ -6,12 +6,14 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { IERC721 } from "@openzeppelin/contracts/interfaces/IERC721.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC2771Context } from "./libs/ERC2771Context.sol";
+import { IOpenPeerDeployer } from "./interfaces/IOpenPeerDeployer.sol";
 
 contract OpenPeerEscrow is ERC2771Context, Initializable {
     using SafeERC20 for IERC20;
     mapping (bytes32 => Escrow) public escrows;
 
     address payable public seller;
+    address public deployer;
     address public arbitrator;
     address payable public feeRecipient;
     uint32 public sellerWaitingTime;
@@ -34,12 +36,14 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     struct Escrow {
         // So we know the escrow exists
         bool exists;
-        // This is the timestamp in whic hthe seller can cancel the escrow after.
+        // This is the timestamp in which the seller can cancel the escrow after.
         // It has a special value:
         // 1 : Permanently locked by the buyer (i.e. marked as paid; the seller can never cancel)
         uint32 sellerCanCancelAfter;
         uint256 fee;
         bool dispute;
+        address payable partner;
+        uint256 openPeerFee;
     }
 
     /// @param _trustedForwarder Forwarder address
@@ -74,6 +78,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         sellerWaitingTime = _sellerWaitingTime;
         _trustedForwarder = trustedForwarder;
         feeDiscountNFT = _feeDiscountNFT;
+        deployer = _msgSender();
     }
 
     // Modifiers
@@ -90,15 +95,15 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     // Errors
     error EscrowNotFound();
 
-    function createNativeEscrow(bytes32 _orderID, address payable _buyer, uint256 _amount) external payable {
-        create(_orderID, _buyer, address(0), _amount);
+    function createNativeEscrow(bytes32 _orderID, address payable _buyer, uint256 _amount, address payable _partner) external payable {
+        create(_orderID, _buyer, address(0), _amount, _partner);
     }
 
-    function createERC20Escrow(bytes32 _orderID, address payable _buyer, address _token,  uint256 _amount) external {
-        create(_orderID, _buyer, _token, _amount);
+    function createERC20Escrow(bytes32 _orderID, address payable _buyer, address _token,  uint256 _amount, address payable _partner) external {
+        create(_orderID, _buyer, _token, _amount, _partner);
     }
 
-    function create(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) private {
+    function create(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount, address payable _partner) private {
         require(_amount > 0, "Invalid amount");
         require(_buyer != address(0), "Invalid buyer");
         require(_buyer != seller, "Seller and buyer must be different");
@@ -106,7 +111,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         bytes32 _orderHash = keccak256(abi.encodePacked(_orderID, seller, _buyer, _token, _amount));
         require(!escrows[_orderHash].exists, "Order already exists");
 
-        uint256 orderFee = (_amount * sellerFee() / 10_000);
+        uint256 opFee = (_amount * openPeerFee() / 10_000);
+        uint256 orderFee = (_amount * sellerFee(_partner) / 10_000);
         uint256 amount = orderFee + _amount;
 
         if (_token == address(0)) {
@@ -118,7 +124,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             require((balanceAfter - balanceBefore) == amount, "Wrong ERC20 amount");
         }
 
-        Escrow memory escrow = Escrow(true, uint32(block.timestamp) + sellerWaitingTime, orderFee, false);
+        Escrow memory escrow = Escrow(true, uint32(block.timestamp) + sellerWaitingTime, orderFee, false, _partner, opFee);
         escrows[_orderHash] = escrow;
         emit EscrowCreated(_orderHash);
     }
@@ -151,7 +157,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
           revert EscrowNotFound();
         }
 
-        transferEscrowAndFees(_orderHash, _buyer, _token, _buyer, _amount, _escrow.fee, false);
+        transferEscrowAndFees(_orderHash, _buyer, _token, _buyer, _amount, _escrow.fee, _escrow.partner, _escrow.openPeerFee, false);
         emit Released(_orderHash);
         return true;
     }
@@ -168,7 +174,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
           revert EscrowNotFound();
         }
 
-        transferEscrowAndFees(_orderHash, _buyer, _token, seller, _amount + _escrow.fee, 0, false);
+        transferEscrowAndFees(_orderHash, _buyer, _token, seller, _amount + _escrow.fee, 0, _escrow.partner, 0, false);
         emit CancelledByBuyer(_orderHash);
         return true;
     }
@@ -187,7 +193,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             return false;
         }
 
-        transferEscrowAndFees(_orderHash, _buyer, _token, seller, _amount + _escrow.fee, 0, false);
+        transferEscrowAndFees(_orderHash, _buyer, _token, seller, _amount + _escrow.fee, 0, _escrow.partner, 0, false);
         emit CancelledBySeller(_orderHash);
         return true;
     }
@@ -226,7 +232,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         require(_winner == seller || _winner == _buyer, "Winner must be seller or buyer");
 
         emit DisputeResolved(_orderHash, _winner);
-        transferEscrowAndFees(_orderHash, _buyer, _token, _winner, _amount, _escrow.fee, true);
+        transferEscrowAndFees(_orderHash, _buyer, _token, _winner, _amount, _escrow.fee, _escrow.partner, _escrow.openPeerFee, true);
         return true;
     }
 
@@ -242,20 +248,27 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address payable _to,
         uint256 _amount,
         uint256 _fee,
+        address payable _partner,
+        uint256 _openPeerFee,
         bool _disputeResolution
     ) private {
         delete escrows[_orderHash];
-        // transfers the amount to the seller | buyer
-        withdraw(_token, _to, _amount);
-        if (_fee > 0) {
-            // transfers the fee to the fee recipient
-            withdraw(_token, feeRecipient, _fee);
-        }
-
         bool sellerPaid = disputePayments[_orderHash][seller];
         bool buyerPaid = disputePayments[_orderHash][_buyer];
         delete disputePayments[_orderHash][seller];
         delete disputePayments[_orderHash][_buyer];
+
+        // transfers the amount to the seller | buyer
+        withdraw(_token, _to, _amount);
+        if (_openPeerFee > 0) {
+            // transfers the OP fee to the fee recipient
+            withdraw(_token, feeRecipient, _openPeerFee);
+        }
+
+        if (_fee - _openPeerFee > 0) {
+            // transfers the OP fee to the fee recipient
+            withdraw(_token, _partner, _fee - _openPeerFee);
+        }
 
         if (_disputeResolution) {
             (bool sentToWinner,) = _to.call{value: disputeFee}("");
@@ -329,7 +342,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     +   Getters           +
     ***********************/
 
-    function sellerFee() public view returns (uint256) {
+    function openPeerFee() public view returns (uint256) {
         IERC721 discountNFT = IERC721(feeDiscountNFT);
 
         if (feeDiscountNFT != address(0) && discountNFT.balanceOf(_msgSender()) > 0) {
@@ -337,5 +350,9 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         }
 
         return feeBps;
+    }
+
+    function sellerFee(address _partner) public view returns (uint256) {
+        return openPeerFee() + IOpenPeerDeployer(deployer).partnerFeeBps(_partner);
     }
 }

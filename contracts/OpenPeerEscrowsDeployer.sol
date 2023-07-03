@@ -10,6 +10,7 @@ import { Ownable } from "./libs/Ownable.sol";
 
 contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     mapping (address => address) public sellerContracts;
+    mapping (address => uint256) public partnerFeeBps;
 
     /***********************
     +   Global settings   +
@@ -143,11 +144,22 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         feeDiscountNFT = _feeDiscountNFT;
     }
 
+    function updatePartnerFeeBps(address[] calldata _partners, uint256[] calldata _fees) external onlyOwner {
+        require(_partners.length == _fees.length, "Invalid input");
+
+        for (uint256 i = 0; i < _partners.length; i++) {
+            require(_fees[i] <= 100, "Invalid fee bps");
+            require(_partners[i] != address(0), "Invalid partner address");
+
+            partnerFeeBps[_partners[i]] = _fees[i];
+        }
+    }
+
     /***********************
     +   Getters           +
     ***********************/
 
-    function sellerFee() public view returns (uint256) {
+    function openPeerFee() public view returns (uint256) {
         IERC721 discountNFT = IERC721(feeDiscountNFT);
 
         if (feeDiscountNFT != address(0) && discountNFT.balanceOf(_msgSender()) > 0) {
@@ -155,5 +167,9 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         }
 
         return fee;
+    }
+
+    function sellerFee(address _partner) public view returns (uint256) {
+        return openPeerFee() + partnerFeeBps[_partner];
     }
 }
