@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { IERC721 } from "@openzeppelin/contracts/interfaces/IERC721.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ERC2771Context } from "./libs/ERC2771Context.sol";
-import { IOpenPeerDeployer } from "./interfaces/IOpenPeerDeployer.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {IERC721} from "@openzeppelin/contracts/interfaces/IERC721.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ERC2771Context} from "./libs/ERC2771Context.sol";
+import {IOpenPeerDeployer} from "./interfaces/IOpenPeerDeployer.sol";
 
 contract OpenPeerEscrow is ERC2771Context, Initializable {
     using SafeERC20 for IERC20;
-    mapping (bytes32 => Escrow) public escrows;
+    mapping(bytes32 => Escrow) public escrows;
 
     address payable public seller;
     address public deployer;
     address public arbitrator;
     address payable public feeRecipient;
-    uint32 public sellerWaitingTime;
     address public feeDiscountNFT;
     uint256 public feeBps;
     uint256 public immutable disputeFee = 1 ether;
@@ -55,14 +54,12 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _feeBps OP fee (bps) ex: 30 == 0.3%
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
-    /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
     /// @param trustedForwarder Forwarder address
     function initialize(
         address payable _seller,
         uint256 _feeBps,
         address _arbitrator,
         address payable _feeRecipient,
-        uint32 _sellerWaitingTime,
         address trustedForwarder,
         address _feeDiscountNFT
     ) external virtual initializer {
@@ -75,7 +72,6 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         feeBps = _feeBps;
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
-        sellerWaitingTime = _sellerWaitingTime;
         _trustedForwarder = trustedForwarder;
         feeDiscountNFT = _feeDiscountNFT;
         deployer = _msgSender();
@@ -95,52 +91,109 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     // Errors
     error EscrowNotFound();
 
-    function createNativeEscrow(bytes32 _orderID, address payable _buyer, uint256 _amount, address payable _partner) external payable {
-        create(_orderID, _buyer, address(0), _amount, _partner);
+    function createNativeEscrow(
+        bytes32 _orderID,
+        address payable _buyer,
+        uint256 _amount,
+        address payable _partner,
+        uint32 _sellerWaitingTime
+    ) external payable {
+        create(
+            _orderID,
+            _buyer,
+            address(0),
+            _amount,
+            _partner,
+            _sellerWaitingTime
+        );
     }
 
-    function createERC20Escrow(bytes32 _orderID, address payable _buyer, address _token,  uint256 _amount, address payable _partner) external {
-        create(_orderID, _buyer, _token, _amount, _partner);
+    function createERC20Escrow(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount,
+        address payable _partner,
+        uint32 _sellerWaitingTime
+    ) external {
+        create(_orderID, _buyer, _token, _amount, _partner, _sellerWaitingTime);
     }
 
-    function create(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount, address payable _partner) private {
+    function create(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount,
+        address payable _partner,
+        uint32 _sellerWaitingTime
+    ) private {
         require(_amount > 0, "Invalid amount");
         require(_buyer != address(0), "Invalid buyer");
         require(_buyer != seller, "Seller and buyer must be different");
+        require(
+            _sellerWaitingTime >= 15 minutes && _sellerWaitingTime <= 1 days,
+            "Invalid seller waiting time"
+        );
 
-        bytes32 _orderHash = keccak256(abi.encodePacked(_orderID, seller, _buyer, _token, _amount));
+        bytes32 _orderHash = keccak256(
+            abi.encodePacked(_orderID, seller, _buyer, _token, _amount)
+        );
         require(!escrows[_orderHash].exists, "Order already exists");
 
-        uint256 opFee = (_amount * openPeerFee() / 10_000);
-        uint256 orderFee = (_amount * sellerFee(_partner) / 10_000);
+        uint256 opFee = ((_amount * openPeerFee()) / 10_000);
+        uint256 orderFee = ((_amount * sellerFee(_partner)) / 10_000);
         uint256 amount = orderFee + _amount;
 
         if (_token == address(0)) {
             require(msg.value == amount, "Incorrect MATIC sent");
         } else {
             uint256 balanceBefore = IERC20(_token).balanceOf(address(this));
-            IERC20(_token).safeTransferFrom(_msgSender(), address(this), amount);
+            IERC20(_token).safeTransferFrom(
+                _msgSender(),
+                address(this),
+                amount
+            );
             uint256 balanceAfter = IERC20(_token).balanceOf(address(this));
-            require((balanceAfter - balanceBefore) == amount, "Wrong ERC20 amount");
+            require(
+                (balanceAfter - balanceBefore) == amount,
+                "Wrong ERC20 amount"
+            );
         }
 
-        Escrow memory escrow = Escrow(true, uint32(block.timestamp) + sellerWaitingTime, orderFee, false, _partner, opFee);
+        Escrow memory escrow = Escrow(
+            true,
+            uint32(block.timestamp) + _sellerWaitingTime,
+            orderFee,
+            false,
+            _partner,
+            opFee
+        );
         escrows[_orderHash] = escrow;
         emit EscrowCreated(_orderHash);
     }
 
     /// @notice Disable the seller from cancelling
     /// @return bool
-    function markAsPaid(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) external returns (bool) {
+    function markAsPaid(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount
+    ) external returns (bool) {
         require(_msgSender() == _buyer, "Must be buyer");
 
         Escrow memory _escrow;
         bytes32 _orderHash;
-        (_escrow, _orderHash) = getEscrowAndHash(_orderID, _buyer, _token, _amount);
+        (_escrow, _orderHash) = getEscrowAndHash(
+            _orderID,
+            _buyer,
+            _token,
+            _amount
+        );
         if (!_escrow.exists) {
-          revert EscrowNotFound();
+            revert EscrowNotFound();
         }
-        if(_escrow.sellerCanCancelAfter == 1) return false;
+        if (_escrow.sellerCanCancelAfter == 1) return false;
 
         escrows[_orderHash].sellerCanCancelAfter = 1;
         emit SellerCancelDisabled(_orderHash);
@@ -149,68 +202,150 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
 
     /// @notice Release ether or token in escrow to the buyer.
     /// @return bool
-    function release(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) external onlySeller returns (bool) {
+    function release(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount
+    ) external onlySeller returns (bool) {
         Escrow memory _escrow;
         bytes32 _orderHash;
-        (_escrow, _orderHash) = getEscrowAndHash(_orderID, _buyer, _token, _amount);
+        (_escrow, _orderHash) = getEscrowAndHash(
+            _orderID,
+            _buyer,
+            _token,
+            _amount
+        );
         if (!_escrow.exists) {
-          revert EscrowNotFound();
+            revert EscrowNotFound();
         }
 
-        transferEscrowAndFees(_orderHash, _buyer, _token, _buyer, _amount, _escrow.fee, _escrow.partner, _escrow.openPeerFee, false);
+        transferEscrowAndFees(
+            _orderHash,
+            _buyer,
+            _token,
+            _buyer,
+            _amount,
+            _escrow.fee,
+            _escrow.partner,
+            _escrow.openPeerFee,
+            false
+        );
         emit Released(_orderHash);
         return true;
     }
 
     /// @notice Cancel the escrow as a buyer with 0 fees
     /// @return bool
-    function buyerCancel(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) external returns (bool) {
+    function buyerCancel(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount
+    ) external returns (bool) {
         require(_msgSender() == _buyer, "Must be buyer");
 
         Escrow memory _escrow;
         bytes32 _orderHash;
-        (_escrow, _orderHash) = getEscrowAndHash(_orderID, _buyer, _token, _amount);
+        (_escrow, _orderHash) = getEscrowAndHash(
+            _orderID,
+            _buyer,
+            _token,
+            _amount
+        );
         if (!_escrow.exists) {
-          revert EscrowNotFound();
+            revert EscrowNotFound();
         }
 
-        transferEscrowAndFees(_orderHash, _buyer, _token, seller, _amount + _escrow.fee, 0, _escrow.partner, 0, false);
+        transferEscrowAndFees(
+            _orderHash,
+            _buyer,
+            _token,
+            seller,
+            _amount + _escrow.fee,
+            0,
+            _escrow.partner,
+            0,
+            false
+        );
         emit CancelledByBuyer(_orderHash);
         return true;
     }
 
     /// @notice Cancel the escrow as a seller
     /// @return bool
-    function sellerCancel(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) external onlySeller returns (bool) {
+    function sellerCancel(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount
+    ) external onlySeller returns (bool) {
         Escrow memory _escrow;
         bytes32 _orderHash;
-        (_escrow, _orderHash) = getEscrowAndHash(_orderID, _buyer, _token, _amount);
+        (_escrow, _orderHash) = getEscrowAndHash(
+            _orderID,
+            _buyer,
+            _token,
+            _amount
+        );
         if (!_escrow.exists) {
-          revert EscrowNotFound();
+            revert EscrowNotFound();
         }
 
-        if (_escrow.sellerCanCancelAfter <= 1 || _escrow.sellerCanCancelAfter > block.timestamp) {
+        if (
+            _escrow.sellerCanCancelAfter <= 1 ||
+            _escrow.sellerCanCancelAfter > block.timestamp
+        ) {
             return false;
         }
 
-        transferEscrowAndFees(_orderHash, _buyer, _token, seller, _amount + _escrow.fee, 0, _escrow.partner, 0, false);
+        transferEscrowAndFees(
+            _orderHash,
+            _buyer,
+            _token,
+            seller,
+            _amount + _escrow.fee,
+            0,
+            _escrow.partner,
+            0,
+            false
+        );
         emit CancelledBySeller(_orderHash);
         return true;
     }
 
     /// @notice Allow seller or buyer to open a dispute
-    function openDispute(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount) external payable returns (bool) {
-        require(_msgSender() == seller || _msgSender() == _buyer, "Must be seller or buyer");
+    function openDispute(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount
+    ) external payable returns (bool) {
+        require(
+            _msgSender() == seller || _msgSender() == _buyer,
+            "Must be seller or buyer"
+        );
         Escrow memory _escrow;
         bytes32 _orderHash;
-        (_escrow, _orderHash) = getEscrowAndHash(_orderID, _buyer, _token, _amount);
+        (_escrow, _orderHash) = getEscrowAndHash(
+            _orderID,
+            _buyer,
+            _token,
+            _amount
+        );
         if (!_escrow.exists) {
-          revert EscrowNotFound();
+            revert EscrowNotFound();
         }
 
         require(_escrow.sellerCanCancelAfter == 1, "Cannot open a dispute yet");
-        require(msg.value == disputeFee, "To open a dispute, you must pay 1 MATIC");
-        require(!disputePayments[_orderHash][_msgSender()], "This address already paid for the dispute");
+        require(
+            msg.value == disputeFee,
+            "To open a dispute, you must pay 1 MATIC"
+        );
+        require(
+            !disputePayments[_orderHash][_msgSender()],
+            "This address already paid for the dispute"
+        );
 
         escrows[_orderHash].dispute = true;
         disputePayments[_orderHash][_msgSender()] = true;
@@ -220,19 +355,43 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
 
     /// @notice Allow arbitrator to resolve a dispute
     /// @param _winner Address to receive the escrowed values - fees
-    function resolveDispute(bytes32 _orderID, address payable _buyer, address _token, uint256 _amount, address payable _winner) external onlyArbitrator returns (bool) {
+    function resolveDispute(
+        bytes32 _orderID,
+        address payable _buyer,
+        address _token,
+        uint256 _amount,
+        address payable _winner
+    ) external onlyArbitrator returns (bool) {
         Escrow memory _escrow;
         bytes32 _orderHash;
-        (_escrow, _orderHash) = getEscrowAndHash(_orderID, _buyer, _token, _amount);
+        (_escrow, _orderHash) = getEscrowAndHash(
+            _orderID,
+            _buyer,
+            _token,
+            _amount
+        );
         if (!_escrow.exists) {
-          revert EscrowNotFound();
+            revert EscrowNotFound();
         }
 
         require(_escrow.dispute, "Dispute is not open");
-        require(_winner == seller || _winner == _buyer, "Winner must be seller or buyer");
+        require(
+            _winner == seller || _winner == _buyer,
+            "Winner must be seller or buyer"
+        );
 
         emit DisputeResolved(_orderHash, _winner);
-        transferEscrowAndFees(_orderHash, _buyer, _token, _winner, _amount, _escrow.fee, _escrow.partner, _escrow.openPeerFee, true);
+        transferEscrowAndFees(
+            _orderHash,
+            _buyer,
+            _token,
+            _winner,
+            _amount,
+            _escrow.fee,
+            _escrow.partner,
+            _escrow.openPeerFee,
+            true
+        );
         return true;
     }
 
@@ -271,27 +430,30 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         }
 
         if (_disputeResolution) {
-            (bool sentToWinner,) = _to.call{value: disputeFee}("");
+            (bool sentToWinner, ) = _to.call{value: disputeFee}("");
             require(sentToWinner, "Failed to send the fee MATIC to the winner");
 
             if (sellerPaid && buyerPaid) {
-                (bool sent,) = feeRecipient.call{value: disputeFee}("");
-                require(sent, "Failed to send the fee MATIC to the fee recipient");
+                (bool sent, ) = feeRecipient.call{value: disputeFee}("");
+                require(
+                    sent,
+                    "Failed to send the fee MATIC to the fee recipient"
+                );
             }
         } else if (sellerPaid && !buyerPaid) {
             // only the seller paid for the dispute, returns the fee to the seller
-            (bool sent,) = seller.call{value: disputeFee}("");
+            (bool sent, ) = seller.call{value: disputeFee}("");
             require(sent, "Failed to send the fee MATIC to the seller");
         } else if (buyerPaid && !sellerPaid) {
             // only the buyer paid for the dispute, returns the fee to the buyer
-            (bool sent,) = _buyer.call{value: disputeFee}("");
+            (bool sent, ) = _buyer.call{value: disputeFee}("");
             require(sent, "Failed to send the fee MATIC to the buyer");
         } else if (buyerPaid && sellerPaid) {
             // seller and buyer paid for the dispute, split the fee between the winner and the fee recipient
-            (bool sentToWinner,) = _to.call{value: disputeFee}("");
+            (bool sentToWinner, ) = _to.call{value: disputeFee}("");
             require(sentToWinner, "Failed to send the fee MATIC to winner");
 
-            (bool sent,) = feeRecipient.call{value: disputeFee}("");
+            (bool sent, ) = feeRecipient.call{value: disputeFee}("");
             require(sent, "Failed to send the fee MATIC to the fee recipient");
         }
     }
@@ -300,19 +462,26 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _token Address of the token to withdraw fees in to
     /// @param _to Address to withdraw fees in to
     /// @param _amount Amount to withdraw
-    function withdraw(address _token, address payable _to, uint256 _amount) private  {
+    function withdraw(
+        address _token,
+        address payable _to,
+        uint256 _amount
+    ) private {
         if (_token == address(0)) {
-            (bool sent,) = _to.call{value: _amount}("");
+            (bool sent, ) = _to.call{value: _amount}("");
             require(sent, "Failed to send MATIC");
         } else {
-            require(IERC20(_token).transfer(_to, _amount), "Failed to send tokens");
+            require(
+                IERC20(_token).transfer(_to, _amount),
+                "Failed to send tokens"
+            );
         }
     }
 
     /// @notice Version recipient
     function versionRecipient() external pure returns (string memory) {
         return "1.0";
-  	}
+    }
 
     /// @notice Hashes the values and returns the matching escrow object and trade hash.
     /// @dev Returns an empty escrow struct and 0 _orderHash if not found.
@@ -326,17 +495,12 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address _buyer,
         address _token,
         uint256 _amount
-    ) view private returns (Escrow memory, bytes32) {
-        bytes32 _orderHash = keccak256(abi.encodePacked(
-            _orderID,
-            seller,
-            _buyer,
-            _token,
-            _amount
-        ));
+    ) private view returns (Escrow memory, bytes32) {
+        bytes32 _orderHash = keccak256(
+            abi.encodePacked(_orderID, seller, _buyer, _token, _amount)
+        );
         return (escrows[_orderHash], _orderHash);
     }
-
 
     /***********************
     +   Getters           +
@@ -345,14 +509,18 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     function openPeerFee() public view returns (uint256) {
         IERC721 discountNFT = IERC721(feeDiscountNFT);
 
-        if (feeDiscountNFT != address(0) && discountNFT.balanceOf(_msgSender()) > 0) {
-          return 0;
+        if (
+            feeDiscountNFT != address(0) &&
+            discountNFT.balanceOf(_msgSender()) > 0
+        ) {
+            return 0;
         }
 
         return feeBps;
     }
 
     function sellerFee(address _partner) public view returns (uint256) {
-        return openPeerFee() + IOpenPeerDeployer(deployer).partnerFeeBps(_partner);
+        return
+            openPeerFee() + IOpenPeerDeployer(deployer).partnerFeeBps(_partner);
     }
 }

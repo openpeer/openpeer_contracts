@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
-import { IERC721 } from "@openzeppelin/contracts/interfaces/IERC721.sol";
-import { OpenPeerEscrow } from "./OpenPeerEscrow.sol";
-import { ERC2771Context } from "./libs/ERC2771Context.sol";
-import { Ownable } from "./libs/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {IERC721} from "@openzeppelin/contracts/interfaces/IERC721.sol";
+import {OpenPeerEscrow} from "./OpenPeerEscrow.sol";
+import {ERC2771Context} from "./libs/ERC2771Context.sol";
+import {Ownable} from "./libs/Ownable.sol";
 
 contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
-    mapping (address => address) public sellerContracts;
-    mapping (address => uint256) public partnerFeeBps;
+    mapping(address => address) public sellerContracts;
+    mapping(address => uint256) public partnerFeeBps;
 
     /***********************
     +   Global settings   +
@@ -18,7 +18,6 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     address public arbitrator;
     address payable public feeRecipient;
     uint256 private fee;
-    uint32 public sellerWaitingTime;
 
     bool public stopped;
 
@@ -36,21 +35,18 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
     /// @param _fee OP fee (bps) ex: 30 == 0.3%
-    /// @param _sellerWaitingTime Number of seconds where the seller can cancel the order if the buyer did not pay
     /// @param _trustedForwarder Forwarder address
     /// @param _feeDiscountNFT NFT contract for fee discounts
-    constructor (
+    constructor(
         address _arbitrator,
         address payable _feeRecipient,
         uint256 _fee,
-        uint32 _sellerWaitingTime,
         address _trustedForwarder,
         address _feeDiscountNFT
     ) ERC2771Context(_trustedForwarder) {
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
         fee = _fee;
-        sellerWaitingTime = _sellerWaitingTime;
         feeDiscountNFT = _feeDiscountNFT;
         implementation = address(new OpenPeerEscrow(_trustedForwarder));
     }
@@ -60,7 +56,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     ***********************/
 
     // circuit breaker modifiers
-    modifier stopInEmergency {
+    modifier stopInEmergency() {
         if (stopped) {
             revert("Paused");
         } else {
@@ -70,13 +66,14 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
 
     function deploy() external returns (address) {
         address deployment = Clones.clone(implementation);
-        OpenPeerEscrow(payable(deployment)).initialize(payable(_msgSender()),
-                                                              fee,
-                                                              arbitrator,
-                                                              feeRecipient,
-                                                              sellerWaitingTime,
-                                                              _trustedForwarder,
-                                                              feeDiscountNFT);
+        OpenPeerEscrow(payable(deployment)).initialize(
+            payable(_msgSender()),
+            fee,
+            arbitrator,
+            feeRecipient,
+            _trustedForwarder,
+            feeDiscountNFT
+        );
         sellerContracts[_msgSender()] = deployment;
         emit ContractCreated(_msgSender(), deployment);
 
@@ -109,12 +106,6 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         fee = _fee;
     }
 
-    /// @notice Updates the seller cancelation time
-    /// @param _sellerWaitingTime Time in seconds
-    function setSellerWaitingTime(uint32 _sellerWaitingTime) public onlyOwner {
-        sellerWaitingTime = _sellerWaitingTime;
-    }
-
     /// @notice Updates the forwarder
     /// @param trustedForwarder biconomy forwarder
     function setTrustedForwarder(address trustedForwarder) external onlyOwner {
@@ -124,7 +115,9 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
 
     /// @notice Updates the implementation
     /// @param _implementation Address of the implementation
-    function setImplementation(address payable _implementation) public onlyOwner {
+    function setImplementation(
+        address payable _implementation
+    ) public onlyOwner {
         require(_implementation != address(0), "Invalid implementation");
         implementation = _implementation;
     }
@@ -136,15 +129,18 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
 
     /// @notice Version recipient
     function versionRecipient() external pure returns (string memory) {
-  		  return "1.0";
-  	}
+        return "1.0";
+    }
 
     /// @notice Updates the NFT contract for fee discounts
     function setFeeDiscountNFT(address _feeDiscountNFT) external onlyOwner {
         feeDiscountNFT = _feeDiscountNFT;
     }
 
-    function updatePartnerFeeBps(address[] calldata _partners, uint256[] calldata _fees) external onlyOwner {
+    function updatePartnerFeeBps(
+        address[] calldata _partners,
+        uint256[] calldata _fees
+    ) external onlyOwner {
         require(_partners.length == _fees.length, "Invalid input");
 
         for (uint256 i = 0; i < _partners.length; i++) {
@@ -162,8 +158,11 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     function openPeerFee() public view returns (uint256) {
         IERC721 discountNFT = IERC721(feeDiscountNFT);
 
-        if (feeDiscountNFT != address(0) && discountNFT.balanceOf(_msgSender()) > 0) {
-          return 0;
+        if (
+            feeDiscountNFT != address(0) &&
+            discountNFT.balanceOf(_msgSender()) > 0
+        ) {
+            return 0;
         }
 
         return fee;
