@@ -50,12 +50,10 @@ describe('OpenPeerEscrow', () => {
     const OpenPeerEscrowsDeployer = await ethers.getContractFactory(
       'OpenPeerEscrowsDeployer'
     );
-    const sellerWaitingTime = 24 * 60 * 60; // 24 hours in seconds
     const contract: OpenPeerEscrowsDeployer = await OpenPeerEscrowsDeployer.deploy(
       arbitrator.address,
       feeRecipient.address,
       FEE,
-      sellerWaitingTime,
       TRUSTED_FORWARDER,
       NFT_CONTRACT
     );
@@ -96,7 +94,13 @@ describe('OpenPeerEscrow', () => {
       describe('Native token', () => {
         it('Should revert with 0 amount', async () => {
           await expect(
-            escrow.createNativeEscrow(orderID, buyer.address, '0', constants.AddressZero)
+            escrow.createNativeEscrow(
+              orderID,
+              buyer.address,
+              '0',
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
+            )
           ).to.be.revertedWith('Invalid amount');
         });
 
@@ -106,7 +110,8 @@ describe('OpenPeerEscrow', () => {
               orderID,
               seller.address,
               '1000',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             )
           ).to.be.revertedWith('Seller and buyer must be different');
         });
@@ -117,7 +122,8 @@ describe('OpenPeerEscrow', () => {
               orderID,
               constants.AddressZero,
               '1000',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             )
           ).to.be.revertedWith('Invalid buyer');
         });
@@ -128,6 +134,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             constants.AddressZero,
+            ONE_DAY_IN_SECS,
             {
               value: '1003'
             }
@@ -138,6 +145,7 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               '1000',
               constants.AddressZero,
+              ONE_DAY_IN_SECS,
               {
                 value: '1003'
               }
@@ -150,10 +158,49 @@ describe('OpenPeerEscrow', () => {
             await deployer.updatePartnerFeeBps([partner.address], [100]);
 
             await expect(
-              escrow.createNativeEscrow(orderID, buyer.address, '1000', partner.address, {
-                value: '1003'
-              })
+              escrow.createNativeEscrow(
+                orderID,
+                buyer.address,
+                '1000',
+                partner.address,
+                ONE_DAY_IN_SECS,
+                {
+                  value: '1003'
+                }
+              )
             ).to.be.revertedWith('Incorrect MATIC sent');
+          });
+        });
+
+        describe('With an invalid seller waiting time', () => {
+          it('Should revert with less than 15 min', async () => {
+            await expect(
+              escrow.createNativeEscrow(
+                orderID,
+                buyer.address,
+                '1000',
+                partner.address,
+                14 * 60 + 59, // 14 min + 59 secs
+                {
+                  value: '1003'
+                }
+              )
+            ).to.be.revertedWith('Invalid seller waiting time');
+          });
+
+          it('Should revert with more than 24 hours', async () => {
+            await expect(
+              escrow.createNativeEscrow(
+                orderID,
+                buyer.address,
+                '1000',
+                partner.address,
+                ONE_DAY_IN_SECS + 1, // 24 hours + 1 sec
+                {
+                  value: '1003'
+                }
+              )
+            ).to.be.revertedWith('Invalid seller waiting time');
           });
         });
       });
@@ -166,7 +213,8 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               erc20.address,
               '0',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             )
           ).to.be.revertedWith('Invalid amount');
         });
@@ -178,7 +226,8 @@ describe('OpenPeerEscrow', () => {
               seller.address,
               erc20.address,
               '1000',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             )
           ).to.be.revertedWith('Seller and buyer must be different');
         });
@@ -190,7 +239,8 @@ describe('OpenPeerEscrow', () => {
               constants.AddressZero,
               erc20.address,
               '1000',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             )
           ).to.be.revertedWith('Invalid buyer');
         });
@@ -201,7 +251,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            constants.AddressZero
+            constants.AddressZero,
+            ONE_DAY_IN_SECS
           );
           await expect(
             escrow.createERC20Escrow(
@@ -209,9 +260,38 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               erc20.address,
               '1000',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             )
           ).to.be.revertedWith('Order already exists');
+        });
+
+        describe('With an invalid seller waiting time', () => {
+          it('Should revert with less than 15 min', async () => {
+            await expect(
+              escrow.createERC20Escrow(
+                orderID,
+                buyer.address,
+                erc20.address,
+                '1000',
+                partner.address,
+                14 * 60 + 59 // 14 min + 59 secs
+              )
+            ).to.be.revertedWith('Invalid seller waiting time');
+          });
+
+          it('Should revert with more than 24 hours', async () => {
+            await expect(
+              escrow.createERC20Escrow(
+                orderID,
+                buyer.address,
+                erc20.address,
+                '1000',
+                partner.address,
+                ONE_DAY_IN_SECS + 1 // 24 hours + 1 sec
+              )
+            ).to.be.revertedWith('Invalid seller waiting time');
+          });
         });
       });
 
@@ -219,7 +299,6 @@ describe('OpenPeerEscrow', () => {
         expect(await escrow.seller()).to.equal(seller.address);
         expect(await escrow.arbitrator()).to.equal(arbitrator.address);
         expect(await escrow.feeRecipient()).to.equal(feeRecipient.address);
-        expect(await escrow.sellerWaitingTime()).to.equal(ONE_DAY_IN_SECS);
         expect(await escrow.feeDiscountNFT()).to.equal(NFT_CONTRACT);
         expect(await escrow.feeBps()).to.equal(FEE);
         expect(await escrow.deployer()).to.equal(deployer.address);
@@ -242,6 +321,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             constants.AddressZero,
+            ONE_DAY_IN_SECS,
             { value: '1003' }
           )
         )
@@ -255,6 +335,7 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           '1000',
           constants.AddressZero,
+          ONE_DAY_IN_SECS,
           {
             value: '1003'
           }
@@ -277,6 +358,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             constants.AddressZero,
+            ONE_DAY_IN_SECS,
             { value: '100' }
           )
         ).to.be.revertedWith('Incorrect MATIC sent');
@@ -289,6 +371,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             constants.AddressZero,
+            ONE_DAY_IN_SECS,
             {
               value: '100000000'
             }
@@ -303,6 +386,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             constants.AddressZero,
+            ONE_DAY_IN_SECS,
             { value: '1003' }
           )
         ).to.changeEtherBalances(
@@ -319,7 +403,8 @@ describe('OpenPeerEscrow', () => {
               orderID,
               buyer.address,
               '1000',
-              partner.address, // partner
+              partner.address, // partner,
+              ONE_DAY_IN_SECS,
               { value: '1013' } // 1000 from the seller + 10 to the partner fee + 3 to the op fee (in WEI)
             )
           ).to.changeEtherBalances(
@@ -336,6 +421,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             constants.AddressZero,
+            ONE_DAY_IN_SECS,
             {
               value: '1003'
             }
@@ -365,6 +451,7 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               '100',
               constants.AddressZero,
+              ONE_DAY_IN_SECS,
               {
                 value: '100'
               }
@@ -399,7 +486,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            constants.AddressZero
+            constants.AddressZero,
+            ONE_DAY_IN_SECS
           )
         )
           .to.emit(escrow, 'EscrowCreated')
@@ -412,7 +500,8 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           erc20.address,
           '1000',
-          constants.AddressZero
+          constants.AddressZero,
+          ONE_DAY_IN_SECS
         );
         const tradeHash = generateTradeHash({
           orderID,
@@ -432,7 +521,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            constants.AddressZero
+            constants.AddressZero,
+            ONE_DAY_IN_SECS
           )
         ).to.changeTokenBalances(
           erc20,
@@ -450,7 +540,8 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               erc20.address,
               '1000',
-              partner.address
+              partner.address,
+              ONE_DAY_IN_SECS
             )
           ).to.changeTokenBalances(
             erc20,
@@ -467,7 +558,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            constants.AddressZero
+            constants.AddressZero,
+            ONE_DAY_IN_SECS
           );
           const tradeHash = generateTradeHash({
             orderID,
@@ -494,7 +586,8 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               erc20.address,
               '100',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             );
             const tradeHash = generateTradeHash({
               orderID,
@@ -520,6 +613,7 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           '1000',
           constants.AddressZero,
+          ONE_DAY_IN_SECS,
           {
             value: '1003'
           }
@@ -647,6 +741,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             partner.address,
+            ONE_DAY_IN_SECS,
             {
               value: '1013'
             }
@@ -676,7 +771,8 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           erc20.address,
           '1000',
-          constants.AddressZero
+          constants.AddressZero,
+          ONE_DAY_IN_SECS
         );
       });
 
@@ -789,7 +885,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            partner.address
+            partner.address,
+            ONE_DAY_IN_SECS
           );
         });
 
@@ -819,6 +916,7 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           '1000',
           constants.AddressZero,
+          ONE_DAY_IN_SECS,
           {
             value: '1003'
           }
@@ -943,6 +1041,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             partner.address,
+            ONE_DAY_IN_SECS,
             {
               value: '1013'
             }
@@ -971,7 +1070,8 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           erc20.address,
           '1000',
-          constants.AddressZero
+          constants.AddressZero,
+          ONE_DAY_IN_SECS
         );
       });
 
@@ -1086,7 +1186,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            partner.address
+            partner.address,
+            ONE_DAY_IN_SECS
           );
         });
 
@@ -1114,6 +1215,7 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           '1000',
           constants.AddressZero,
+          15 * 60, // 15 minutes
           {
             value: '1003'
           }
@@ -1147,7 +1249,7 @@ describe('OpenPeerEscrow', () => {
       });
 
       it('Should transfer funds to the seller', async () => {
-        await time.increaseTo((await time.latest()) + ONE_DAY_IN_SECS);
+        await time.increaseTo((await time.latest()) + 15 * 60);
         await expect(
           escrow.sellerCancel(orderID, buyer.address, constants.AddressZero, '1000')
         ).to.changeEtherBalances(
@@ -1180,6 +1282,7 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             '1000',
             partner.address,
+            ONE_DAY_IN_SECS,
             {
               value: '1013'
             }
@@ -1210,7 +1313,8 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           erc20.address,
           '1000',
-          constants.AddressZero
+          constants.AddressZero,
+          ONE_DAY_IN_SECS
         );
       });
 
@@ -1273,7 +1377,8 @@ describe('OpenPeerEscrow', () => {
             buyer.address,
             erc20.address,
             '1000',
-            partner.address
+            partner.address,
+            ONE_DAY_IN_SECS
           );
         });
 
@@ -1304,6 +1409,7 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           '1000',
           constants.AddressZero,
+          ONE_DAY_IN_SECS,
           {
             value: '1003'
           }
@@ -1371,6 +1477,7 @@ describe('OpenPeerEscrow', () => {
         buyer.address,
         '1000',
         constants.AddressZero,
+        ONE_DAY_IN_SECS,
         { value: '1003' }
       );
     });
@@ -1633,7 +1740,8 @@ describe('OpenPeerEscrow', () => {
           buyer.address,
           erc20.address,
           '1000',
-          constants.AddressZero
+          constants.AddressZero,
+          ONE_DAY_IN_SECS
         );
         await expect(
           escrow.openDispute(orderID, buyer.address, erc20.address, '1000', {
@@ -1651,6 +1759,7 @@ describe('OpenPeerEscrow', () => {
         buyer.address,
         '1000',
         constants.AddressZero,
+        ONE_DAY_IN_SECS,
         { value: '1003' }
       );
       await escrow
@@ -1914,6 +2023,7 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               '1000',
               partner.address,
+              ONE_DAY_IN_SECS,
               { value: '1013' }
             );
             await escrow
@@ -2111,7 +2221,8 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               erc20.address,
               '1000',
-              constants.AddressZero
+              constants.AddressZero,
+              ONE_DAY_IN_SECS
             );
             await escrow
               .connect(buyer)
@@ -2380,7 +2491,8 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               erc20.address,
               '1000',
-              partner.address
+              partner.address,
+              ONE_DAY_IN_SECS
             );
             await escrow
               .connect(buyer)

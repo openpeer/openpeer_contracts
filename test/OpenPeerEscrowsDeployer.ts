@@ -13,7 +13,6 @@ describe('OpenPeerEscrowsDeployer', () => {
   let arbitrator: SignerWithAddress;
   let feeRecipient: SignerWithAddress;
   let fee: number;
-  const sellerWaitingTime: number = 24 * 60 * 60;
 
   beforeEach(async () => {
     const {
@@ -36,12 +35,10 @@ describe('OpenPeerEscrowsDeployer', () => {
     );
     const [owner, arbitrator, feeRecipient] = await ethers.getSigners();
     const fee = 30;
-    const sellerWaitingTime = 24 * 60 * 60; // 24 hours in seconds
     const contract: OpenPeerEscrowsDeployer = await OpenPeerEscrowsDeployer.deploy(
       arbitrator.address,
       feeRecipient.address,
       fee,
-      sellerWaitingTime,
       '0x69015912AA33720b842dCD6aC059Ed623F28d9f7',
       constants.AddressZero
     );
@@ -57,7 +54,6 @@ describe('OpenPeerEscrowsDeployer', () => {
       expect(await deployer.arbitrator()).to.be.equal(arbitrator.address);
       expect(await deployer.feeRecipient()).to.be.equal(feeRecipient.address);
       expect(await deployer.sellerFee(constants.AddressZero)).to.be.equal(fee);
-      expect(await deployer.sellerWaitingTime()).to.be.equal(sellerWaitingTime);
     });
 
     it('Should initialize the implementation', async () => {
@@ -72,7 +68,6 @@ describe('OpenPeerEscrowsDeployer', () => {
             '30',
             arbitrator.address,
             feeRecipient.address,
-            sellerWaitingTime,
             constants.AddressZero,
             '0xf0511f123164602042ab2bCF02111fA5D3Fe97CD'
           )
