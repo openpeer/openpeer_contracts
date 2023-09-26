@@ -168,7 +168,7 @@ describe('OpenPeerEscrow', () => {
                   value: '1003'
                 }
               )
-            ).to.be.revertedWith('Incorrect MATIC sent');
+            ).to.be.revertedWith('Incorrect amount sent');
           });
         });
 
@@ -361,7 +361,7 @@ describe('OpenPeerEscrow', () => {
             ONE_DAY_IN_SECS,
             { value: '100' }
           )
-        ).to.be.revertedWith('Incorrect MATIC sent');
+        ).to.be.revertedWith('Incorrect amount sent');
       });
 
       it('Should revert with a bigger amount', async () => {
@@ -376,7 +376,7 @@ describe('OpenPeerEscrow', () => {
               value: '100000000'
             }
           )
-        ).to.be.revertedWith('Incorrect MATIC sent');
+        ).to.be.revertedWith('Incorrect amount sent');
       });
 
       it('Should transfer funds to the escrow contract', async () => {
@@ -2752,6 +2752,46 @@ describe('OpenPeerEscrow', () => {
             });
           });
         });
+      });
+    });
+  });
+
+  describe('Deposit', () => {
+    describe('Native token', () => {
+      it('Should revert with wrong amount', async () => {
+        await expect(
+          escrow.deposit(constants.AddressZero, '1000', {
+            value: '999'
+          })
+        ).to.be.revertedWith('Incorrect amount sent');
+      });
+
+      it('Should update the balances', async () => {
+        await expect(
+          escrow.deposit(constants.AddressZero, '1000', {
+            value: '1000'
+          })
+        ).to.changeEtherBalances([escrow, seller], [1000, -1000]);
+
+        await escrow.deposit(constants.AddressZero, '1000', {
+          value: '1000'
+        });
+
+        expect(await escrow.balances(constants.AddressZero)).to.equal(2000);
+      });
+    });
+
+    describe('ERC20 token', () => {
+      it('Should update the balances', async () => {
+        await expect(escrow.deposit(erc20.address, '1000')).to.changeTokenBalances(
+          erc20,
+          [escrow, seller],
+          [1000, -1000]
+        );
+
+        await escrow.deposit(erc20.address, '10000');
+
+        expect(await escrow.balances(erc20.address)).to.equal(11000);
       });
     });
   });

@@ -20,6 +20,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     uint256 public feeBps;
     uint256 public immutable disputeFee = 1 ether;
     mapping(bytes32 => mapping(address => bool)) public disputePayments;
+    mapping(address => uint256) public balances;
 
     /**********************
     +   Events            +
@@ -104,7 +105,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             address(0),
             _amount,
             _partner,
-            _sellerWaitingTime
+            _sellerWaitingTime,
+            false
         );
     }
 
@@ -116,7 +118,15 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address payable _partner,
         uint32 _sellerWaitingTime
     ) external {
-        create(_orderID, _buyer, _token, _amount, _partner, _sellerWaitingTime);
+        create(
+            _orderID,
+            _buyer,
+            _token,
+            _amount,
+            _partner,
+            _sellerWaitingTime,
+            false
+        );
     }
 
     function create(
@@ -125,7 +135,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address _token,
         uint256 _amount,
         address payable _partner,
-        uint32 _sellerWaitingTime
+        uint32 _sellerWaitingTime,
+        bool _automaticEscrow
     ) private {
         require(_amount > 0, "Invalid amount");
         require(_buyer != address(0), "Invalid buyer");
@@ -144,21 +155,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         uint256 orderFee = ((_amount * sellerFee(_partner)) / 10_000);
         uint256 amount = orderFee + _amount;
 
-        if (_token == address(0)) {
-            require(msg.value == amount, "Incorrect MATIC sent");
-        } else {
-            uint256 balanceBefore = IERC20(_token).balanceOf(address(this));
-            IERC20(_token).safeTransferFrom(
-                _msgSender(),
-                address(this),
-                amount
-            );
-            uint256 balanceAfter = IERC20(_token).balanceOf(address(this));
-            require(
-                (balanceAfter - balanceBefore) == amount,
-                "Wrong ERC20 amount"
-            );
-        }
+        validateTokenAmount(_token, amount, _automaticEscrow);
 
         Escrow memory escrow = Escrow(
             true,
@@ -170,6 +167,33 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         );
         escrows[_orderHash] = escrow;
         emit EscrowCreated(_orderHash);
+    }
+
+    function validateTokenAmount(
+        address _token,
+        uint256 _amount,
+        bool _automaticEscrow
+    ) internal {
+        if (_automaticEscrow) {
+            require(balances[_token] >= _amount, "Not enough tokens in escrow");
+            balances[_token] -= _amount;
+        } else {
+            if (_token == address(0)) {
+                require(msg.value == _amount, "Incorrect amount sent");
+            } else {
+                uint256 balanceBefore = IERC20(_token).balanceOf(address(this));
+                IERC20(_token).safeTransferFrom(
+                    _msgSender(),
+                    address(this),
+                    _amount
+                );
+                uint256 balanceAfter = IERC20(_token).balanceOf(address(this));
+                require(
+                    (balanceAfter - balanceBefore) == _amount,
+                    "Wrong ERC20 amount"
+                );
+            }
+        }
     }
 
     /// @notice Disable the seller from cancelling
@@ -522,5 +546,14 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     function sellerFee(address _partner) public view returns (uint256) {
         return
             openPeerFee() + IOpenPeerDeployer(deployer).partnerFeeBps(_partner);
+    }
+
+    /***********************************
+    +   Deposit and withdraw           +
+    ***********************************/
+
+    function deposit(address _token, uint256 _amount) external payable {
+        validateTokenAmount(_token, _amount, false);
+        balances[_token] += _amount;
     }
 }
