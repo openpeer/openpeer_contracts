@@ -44,6 +44,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         bool dispute;
         address payable partner;
         uint256 openPeerFee;
+        bool automaticEscrow;
     }
 
     /// @param _trustedForwarder Forwarder address
@@ -97,7 +98,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address payable _buyer,
         uint256 _amount,
         address payable _partner,
-        uint32 _sellerWaitingTime
+        uint32 _sellerWaitingTime,
+        bool _automaticEscrow
     ) external payable {
         create(
             _orderID,
@@ -106,7 +108,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             _amount,
             _partner,
             _sellerWaitingTime,
-            false
+            _automaticEscrow
         );
     }
 
@@ -116,7 +118,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address _token,
         uint256 _amount,
         address payable _partner,
-        uint32 _sellerWaitingTime
+        uint32 _sellerWaitingTime,
+        bool _automaticEscrow
     ) external {
         create(
             _orderID,
@@ -125,7 +128,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             _amount,
             _partner,
             _sellerWaitingTime,
-            false
+            _automaticEscrow
         );
     }
 
@@ -145,6 +148,9 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             _sellerWaitingTime >= 15 minutes && _sellerWaitingTime <= 1 days,
             "Invalid seller waiting time"
         );
+        if (_automaticEscrow) {
+            require(msg.value == 0, "Cannot send tokens with automatic escrow");
+        }
 
         bytes32 _orderHash = keccak256(
             abi.encodePacked(_orderID, seller, _buyer, _token, _amount)
@@ -155,7 +161,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         uint256 orderFee = ((_amount * sellerFee(_partner)) / 10_000);
         uint256 amount = orderFee + _amount;
 
-        validateTokenAmount(_token, amount, _automaticEscrow);
+        validateAndPullTokens(_token, amount, _automaticEscrow);
 
         Escrow memory escrow = Escrow(
             true,
@@ -163,13 +169,14 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             orderFee,
             false,
             _partner,
-            opFee
+            opFee,
+            _automaticEscrow
         );
         escrows[_orderHash] = escrow;
         emit EscrowCreated(_orderHash);
     }
 
-    function validateTokenAmount(
+    function validateAndPullTokens(
         address _token,
         uint256 _amount,
         bool _automaticEscrow
@@ -253,7 +260,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             _escrow.fee,
             _escrow.partner,
             _escrow.openPeerFee,
-            false
+            false,
+            _escrow.automaticEscrow
         );
         emit Released(_orderHash);
         return true;
@@ -290,7 +298,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             0,
             _escrow.partner,
             0,
-            false
+            false,
+            _escrow.automaticEscrow
         );
         emit CancelledByBuyer(_orderHash);
         return true;
@@ -332,7 +341,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             0,
             _escrow.partner,
             0,
-            false
+            false,
+            _escrow.automaticEscrow
         );
         emit CancelledBySeller(_orderHash);
         return true;
@@ -414,7 +424,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             _escrow.fee,
             _escrow.partner,
             _escrow.openPeerFee,
-            true
+            true,
+            _escrow.automaticEscrow
         );
         return true;
     }
@@ -424,6 +435,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _amount Amount to be transfered
     /// @param _fee Fee to be transfered
     /// @param _disputeResolution Is a dispute being resolved?
+    /// @param _automaticEscrow The escrow was done automatically
     function transferEscrowAndFees(
         bytes32 _orderHash,
         address payable _buyer,
@@ -433,7 +445,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         uint256 _fee,
         address payable _partner,
         uint256 _openPeerFee,
-        bool _disputeResolution
+        bool _disputeResolution,
+        bool _automaticEscrow
     ) private {
         delete escrows[_orderHash];
         bool sellerPaid = disputePayments[_orderHash][seller];
@@ -441,16 +454,16 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         delete disputePayments[_orderHash][seller];
         delete disputePayments[_orderHash][_buyer];
 
-        // transfers the amount to the seller | buyer
-        withdraw(_token, _to, _amount);
+        // transfers the amount to the seller | buyer | this contract
+        withdraw(_token, _to, _amount, _automaticEscrow);
         if (_openPeerFee > 0) {
             // transfers the OP fee to the fee recipient
-            withdraw(_token, feeRecipient, _openPeerFee);
+            withdraw(_token, feeRecipient, _openPeerFee, false);
         }
 
         if (_fee - _openPeerFee > 0) {
             // transfers the OP fee to the fee recipient
-            withdraw(_token, _partner, _fee - _openPeerFee);
+            withdraw(_token, _partner, _fee - _openPeerFee, false);
         }
 
         if (_disputeResolution) {
@@ -486,19 +499,25 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _token Address of the token to withdraw fees in to
     /// @param _to Address to withdraw fees in to
     /// @param _amount Amount to withdraw
+    /// @param _updateBalancesOnly Update internal balances
     function withdraw(
         address _token,
         address payable _to,
-        uint256 _amount
+        uint256 _amount,
+        bool _updateBalancesOnly
     ) private {
-        if (_token == address(0)) {
-            (bool sent, ) = _to.call{value: _amount}("");
-            require(sent, "Failed to send MATIC");
+        if (_updateBalancesOnly && _to == seller) {
+            balances[_token] += _amount;
         } else {
-            require(
-                IERC20(_token).transfer(_to, _amount),
-                "Failed to send tokens"
-            );
+            if (_token == address(0)) {
+                (bool sent, ) = _to.call{value: _amount}("");
+                require(sent, "Failed to send MATIC");
+            } else {
+                require(
+                    IERC20(_token).transfer(_to, _amount),
+                    "Failed to send tokens"
+                );
+            }
         }
     }
 
@@ -552,8 +571,13 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     +   Deposit and withdraw           +
     ***********************************/
 
+    // accept ETH deposits
+    receive() external payable {
+        balances[address(0)] += msg.value;
+    }
+
     function deposit(address _token, uint256 _amount) external payable {
-        validateTokenAmount(_token, _amount, false);
+        validateAndPullTokens(_token, _amount, false);
         balances[_token] += _amount;
     }
 }

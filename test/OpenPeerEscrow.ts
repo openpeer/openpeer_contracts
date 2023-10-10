@@ -99,7 +99,8 @@ describe('OpenPeerEscrow', () => {
               buyer.address,
               '0',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Invalid amount');
         });
@@ -111,7 +112,8 @@ describe('OpenPeerEscrow', () => {
               seller.address,
               '1000',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Seller and buyer must be different');
         });
@@ -123,7 +125,8 @@ describe('OpenPeerEscrow', () => {
               constants.AddressZero,
               '1000',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Invalid buyer');
         });
@@ -135,6 +138,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             constants.AddressZero,
             ONE_DAY_IN_SECS,
+            false,
             {
               value: '1003'
             }
@@ -146,6 +150,7 @@ describe('OpenPeerEscrow', () => {
               '1000',
               constants.AddressZero,
               ONE_DAY_IN_SECS,
+              false,
               {
                 value: '1003'
               }
@@ -164,6 +169,7 @@ describe('OpenPeerEscrow', () => {
                 '1000',
                 partner.address,
                 ONE_DAY_IN_SECS,
+                false,
                 {
                   value: '1003'
                 }
@@ -181,6 +187,7 @@ describe('OpenPeerEscrow', () => {
                 '1000',
                 partner.address,
                 14 * 60 + 59, // 14 min + 59 secs
+                false,
                 {
                   value: '1003'
                 }
@@ -196,11 +203,27 @@ describe('OpenPeerEscrow', () => {
                 '1000',
                 partner.address,
                 ONE_DAY_IN_SECS + 1, // 24 hours + 1 sec
+                false,
                 {
                   value: '1003'
                 }
               )
             ).to.be.revertedWith('Invalid seller waiting time');
+          });
+        });
+
+        describe('With instant escrow', () => {
+          it('Should revert without balance', async () => {
+            await expect(
+              escrow.createNativeEscrow(
+                orderID,
+                buyer.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              )
+            ).to.be.revertedWith('Not enough tokens in escrow');
           });
         });
       });
@@ -214,7 +237,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '0',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Invalid amount');
         });
@@ -227,7 +251,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '1000',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Seller and buyer must be different');
         });
@@ -240,7 +265,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '1000',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Invalid buyer');
         });
@@ -252,7 +278,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             constants.AddressZero,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           );
           await expect(
             escrow.createERC20Escrow(
@@ -261,7 +288,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '1000',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.be.revertedWith('Order already exists');
         });
@@ -275,7 +303,8 @@ describe('OpenPeerEscrow', () => {
                 erc20.address,
                 '1000',
                 partner.address,
-                14 * 60 + 59 // 14 min + 59 secs
+                14 * 60 + 59, // 14 min + 59 secs
+                false
               )
             ).to.be.revertedWith('Invalid seller waiting time');
           });
@@ -288,7 +317,8 @@ describe('OpenPeerEscrow', () => {
                 erc20.address,
                 '1000',
                 partner.address,
-                ONE_DAY_IN_SECS + 1 // 24 hours + 1 sec
+                ONE_DAY_IN_SECS + 1, // 24 hours + 1 sec
+                false
               )
             ).to.be.revertedWith('Invalid seller waiting time');
           });
@@ -322,6 +352,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             constants.AddressZero,
             ONE_DAY_IN_SECS,
+            false,
             { value: '1003' }
           )
         )
@@ -336,6 +367,7 @@ describe('OpenPeerEscrow', () => {
           '1000',
           constants.AddressZero,
           ONE_DAY_IN_SECS,
+          false,
           {
             value: '1003'
           }
@@ -359,6 +391,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             constants.AddressZero,
             ONE_DAY_IN_SECS,
+            false,
             { value: '100' }
           )
         ).to.be.revertedWith('Incorrect amount sent');
@@ -372,6 +405,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             constants.AddressZero,
             ONE_DAY_IN_SECS,
+            false,
             {
               value: '100000000'
             }
@@ -387,6 +421,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             constants.AddressZero,
             ONE_DAY_IN_SECS,
+            false,
             { value: '1003' }
           )
         ).to.changeEtherBalances(
@@ -405,6 +440,7 @@ describe('OpenPeerEscrow', () => {
               '1000',
               partner.address, // partner,
               ONE_DAY_IN_SECS,
+              false,
               { value: '1013' } // 1000 from the seller + 10 to the partner fee + 3 to the op fee (in WEI)
             )
           ).to.changeEtherBalances(
@@ -422,6 +458,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             constants.AddressZero,
             ONE_DAY_IN_SECS,
+            false,
             {
               value: '1003'
             }
@@ -452,6 +489,7 @@ describe('OpenPeerEscrow', () => {
               '100',
               constants.AddressZero,
               ONE_DAY_IN_SECS,
+              false,
               {
                 value: '100'
               }
@@ -467,6 +505,24 @@ describe('OpenPeerEscrow', () => {
             const [, , fee] = await escrow.escrows(tradeHash);
             expect(fee).to.equal(0);
           });
+        });
+      });
+
+      describe('With instant escrow', () => {
+        it('Should remove the balance', async () => {
+          await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+
+          expect(await escrow.balances(constants.AddressZero)).to.equal('1003');
+
+          await escrow.createNativeEscrow(
+            orderID,
+            buyer.address,
+            '1000',
+            constants.AddressZero,
+            ONE_DAY_IN_SECS,
+            true
+          );
+          expect(await escrow.balances(constants.AddressZero)).to.equal('0');
         });
       });
     });
@@ -487,7 +543,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             constants.AddressZero,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           )
         )
           .to.emit(escrow, 'EscrowCreated')
@@ -501,7 +558,8 @@ describe('OpenPeerEscrow', () => {
           erc20.address,
           '1000',
           constants.AddressZero,
-          ONE_DAY_IN_SECS
+          ONE_DAY_IN_SECS,
+          false
         );
         const tradeHash = generateTradeHash({
           orderID,
@@ -522,7 +580,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             constants.AddressZero,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           )
         ).to.changeTokenBalances(
           erc20,
@@ -541,7 +600,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '1000',
               partner.address,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             )
           ).to.changeTokenBalances(
             erc20,
@@ -559,7 +619,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             constants.AddressZero,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           );
           const tradeHash = generateTradeHash({
             orderID,
@@ -587,7 +648,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '100',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             );
             const tradeHash = generateTradeHash({
               orderID,
@@ -602,6 +664,25 @@ describe('OpenPeerEscrow', () => {
           });
         });
       });
+
+      describe('With instant escrow', () => {
+        it('Should remove the balance', async () => {
+          await escrow.deposit(erc20.address, '1003', { value: '1003' });
+
+          expect(await escrow.balances(erc20.address)).to.equal('1003');
+
+          await escrow.createERC20Escrow(
+            orderID,
+            buyer.address,
+            erc20.address,
+            '1000',
+            constants.AddressZero,
+            ONE_DAY_IN_SECS,
+            true
+          );
+          expect(await escrow.balances(erc20.address)).to.equal('0');
+        });
+      });
     });
   });
 
@@ -614,6 +695,7 @@ describe('OpenPeerEscrow', () => {
           '1000',
           constants.AddressZero,
           ONE_DAY_IN_SECS,
+          false,
           {
             value: '1003'
           }
@@ -742,6 +824,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             partner.address,
             ONE_DAY_IN_SECS,
+            false,
             {
               value: '1013'
             }
@@ -772,7 +855,8 @@ describe('OpenPeerEscrow', () => {
           erc20.address,
           '1000',
           constants.AddressZero,
-          ONE_DAY_IN_SECS
+          ONE_DAY_IN_SECS,
+          false
         );
       });
 
@@ -886,7 +970,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             partner.address,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           );
         });
 
@@ -917,6 +1002,7 @@ describe('OpenPeerEscrow', () => {
           '1000',
           constants.AddressZero,
           ONE_DAY_IN_SECS,
+          false,
           {
             value: '1003'
           }
@@ -964,6 +1050,7 @@ describe('OpenPeerEscrow', () => {
             .connect(buyer)
             .markAsPaid(orderID, buyer.address, constants.AddressZero, '1000');
         });
+
         describe('When only the seller paid', () => {
           it('Should return the dispute fee to the seller', async () => {
             await escrow.openDispute(
@@ -982,6 +1069,53 @@ describe('OpenPeerEscrow', () => {
               [escrowBalance, 0, 0, winnerBalance.add(BigNumber.from('3'))] // seller gets 1 MATIC from the dispute fee + escrowed values + fee
             );
           });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+              await escrow.createNativeEscrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000'
+                );
+              await escrow.openDispute(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                constants.AddressZero,
+                '1000',
+                { value: DISPUTE_FEE }
+              );
+            });
+
+            it('Should return the dispute fee to the seller', async () => {
+              await expect(
+                escrow
+                  .connect(buyer)
+                  .buyerCancel(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    constants.AddressZero,
+                    '1000'
+                  )
+              ).to.changeEtherBalances(
+                [escrow, buyer, feeRecipient, seller],
+                [DISPUTE_FEE.mul(-1), 0, 0, DISPUTE_FEE]
+              );
+              await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+            });
+          });
         });
 
         describe('When only the buyer paid', () => {
@@ -999,6 +1133,57 @@ describe('OpenPeerEscrow', () => {
               [escrow, buyer, feeRecipient, seller],
               [escrowBalance, DISPUTE_FEE, 0, 1003]
             );
+          });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+              await escrow.createNativeEscrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000'
+                );
+            });
+
+            it('Should return the dispute fee to the buyer', async () => {
+              await escrow
+                .connect(buyer)
+                .openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+              await expect(
+                escrow
+                  .connect(buyer)
+                  .buyerCancel(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    constants.AddressZero,
+                    '1000'
+                  )
+              ).to.changeEtherBalances(
+                [escrow, buyer, feeRecipient, seller],
+                [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
+              );
+              await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+            });
           });
         });
 
@@ -1030,6 +1215,64 @@ describe('OpenPeerEscrow', () => {
               ]
             );
           });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+              await escrow.createNativeEscrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000'
+                );
+            });
+
+            it('Should return the dispute fee to the winner', async () => {
+              await escrow.openDispute(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                constants.AddressZero,
+                '1000',
+                { value: DISPUTE_FEE }
+              );
+              await escrow
+                .connect(buyer)
+                .openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+              await expect(
+                escrow
+                  .connect(buyer)
+                  .buyerCancel(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    constants.AddressZero,
+                    '1000'
+                  )
+              ).to.changeEtherBalances(
+                [escrow, buyer, feeRecipient, seller],
+                [DISPUTE_FEE.mul(-2), 0, DISPUTE_FEE, DISPUTE_FEE]
+              );
+              await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+            });
+          });
         });
       });
 
@@ -1042,6 +1285,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             partner.address,
             ONE_DAY_IN_SECS,
+            false,
             {
               value: '1013'
             }
@@ -1061,6 +1305,33 @@ describe('OpenPeerEscrow', () => {
           ).to.changeEtherBalances([escrow, seller], [-1013, 1013]);
         });
       });
+
+      describe('With instant escrow', () => {
+        beforeEach(async () => {
+          await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+          await escrow.createNativeEscrow(
+            ethers.utils.formatBytes32String('2'),
+            buyer.address,
+            '1000',
+            constants.AddressZero,
+            ONE_DAY_IN_SECS,
+            true
+          );
+          expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+        });
+
+        it('Should return the balance', async () => {
+          await escrow
+            .connect(buyer)
+            .buyerCancel(
+              ethers.utils.formatBytes32String('2'),
+              buyer.address,
+              constants.AddressZero,
+              '1000'
+            );
+          expect(await escrow.balances(constants.AddressZero)).to.equal('1003');
+        });
+      });
     });
 
     describe('ERC20 token', () => {
@@ -1071,7 +1342,8 @@ describe('OpenPeerEscrow', () => {
           erc20.address,
           '1000',
           constants.AddressZero,
-          ONE_DAY_IN_SECS
+          ONE_DAY_IN_SECS,
+          false
         );
       });
 
@@ -1136,6 +1408,56 @@ describe('OpenPeerEscrow', () => {
               [DISPUTE_FEE.mul(-1), 0, 0, DISPUTE_FEE]
             );
           });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(erc20.address, '1003', { value: '1003' });
+              await escrow.createERC20Escrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                erc20.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              expect(await escrow.balances(erc20.address)).to.equal('0');
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000'
+                );
+            });
+
+            it('Should return the dispute fee to the seller', async () => {
+              await escrow.openDispute(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                erc20.address,
+                '1000',
+                {
+                  value: DISPUTE_FEE
+                }
+              );
+              await expect(
+                escrow
+                  .connect(buyer)
+                  .buyerCancel(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    erc20.address,
+                    '1000'
+                  )
+              ).to.changeEtherBalances(
+                [escrow, buyer, feeRecipient, seller],
+                [DISPUTE_FEE.mul(-1), 0, 0, DISPUTE_FEE]
+              );
+              expect(await escrow.balances(erc20.address)).to.equal('1003');
+            });
+          });
         });
 
         describe('When only the buyer paid', () => {
@@ -1153,6 +1475,58 @@ describe('OpenPeerEscrow', () => {
               [escrow, buyer, feeRecipient, seller],
               [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
             );
+          });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(erc20.address, '1003', { value: '1003' });
+              await escrow.createERC20Escrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                erc20.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              expect(await escrow.balances(erc20.address)).to.equal('0');
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000'
+                );
+            });
+
+            it('Should return the dispute fee to the buyer', async () => {
+              await escrow
+                .connect(buyer)
+                .openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+              await expect(
+                escrow
+                  .connect(buyer)
+                  .buyerCancel(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    erc20.address,
+                    '1000'
+                  )
+              ).to.changeEtherBalances(
+                [escrow, buyer, feeRecipient, seller],
+                [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
+              );
+              await escrow.deposit(erc20.address, '1003', { value: '1003' });
+            });
           });
         });
 
@@ -1175,6 +1549,67 @@ describe('OpenPeerEscrow', () => {
               [DISPUTE_FEE.mul(-2), 0, DISPUTE_FEE, DISPUTE_FEE]
             );
           });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(erc20.address, '1003', { value: '1003' });
+              await escrow.createERC20Escrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                erc20.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              expect(await escrow.balances(erc20.address)).to.equal('0');
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000'
+                );
+            });
+
+            it('Should return the dispute fee to the winner', async () => {
+              await escrow.openDispute(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                erc20.address,
+                '1000',
+                {
+                  value: DISPUTE_FEE
+                }
+              );
+              await escrow
+                .connect(buyer)
+                .openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+              await expect(
+                escrow
+                  .connect(buyer)
+                  .buyerCancel(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    erc20.address,
+                    '1000'
+                  )
+              ).to.changeEtherBalances(
+                [escrow, buyer, feeRecipient, seller],
+                [DISPUTE_FEE.mul(-2), 0, DISPUTE_FEE, DISPUTE_FEE]
+              );
+              await escrow.deposit(erc20.address, '1003', { value: '1003' });
+            });
+          });
         });
       });
 
@@ -1187,7 +1622,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             partner.address,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           );
         });
 
@@ -1204,6 +1640,34 @@ describe('OpenPeerEscrow', () => {
           ).to.changeTokenBalances(erc20, [escrow, seller], [-1013, 1013]);
         });
       });
+
+      describe('With instant escrow', () => {
+        beforeEach(async () => {
+          await escrow.deposit(erc20.address, '1003', { value: '1003' });
+          await escrow.createERC20Escrow(
+            ethers.utils.formatBytes32String('2'),
+            buyer.address,
+            erc20.address,
+            '1000',
+            constants.AddressZero,
+            ONE_DAY_IN_SECS,
+            true
+          );
+          expect(await escrow.balances(erc20.address)).to.equal('0');
+        });
+
+        it('Should return the balance', async () => {
+          await escrow
+            .connect(buyer)
+            .buyerCancel(
+              ethers.utils.formatBytes32String('2'),
+              buyer.address,
+              erc20.address,
+              '1000'
+            );
+          expect(await escrow.balances(erc20.address)).to.equal('1003');
+        });
+      });
     });
   });
 
@@ -1216,6 +1680,7 @@ describe('OpenPeerEscrow', () => {
           '1000',
           constants.AddressZero,
           15 * 60, // 15 minutes
+          false,
           {
             value: '1003'
           }
@@ -1283,6 +1748,7 @@ describe('OpenPeerEscrow', () => {
             '1000',
             partner.address,
             ONE_DAY_IN_SECS,
+            false,
             {
               value: '1013'
             }
@@ -1304,6 +1770,32 @@ describe('OpenPeerEscrow', () => {
           );
         });
       });
+
+      describe('With instant escrow', () => {
+        beforeEach(async () => {
+          await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+          await escrow.createNativeEscrow(
+            ethers.utils.formatBytes32String('2'),
+            buyer.address,
+            '1000',
+            constants.AddressZero,
+            15 * 60, // 15 minutes
+            true
+          );
+          expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+        });
+
+        it('Should return the balance', async () => {
+          await time.increaseTo((await time.latest()) + 15 * 60);
+          await escrow.sellerCancel(
+            ethers.utils.formatBytes32String('2'),
+            buyer.address,
+            constants.AddressZero,
+            '1000'
+          );
+          expect(await escrow.balances(constants.AddressZero)).to.equal('1003');
+        });
+      });
     });
 
     describe('ERC20 token', () => {
@@ -1314,7 +1806,8 @@ describe('OpenPeerEscrow', () => {
           erc20.address,
           '1000',
           constants.AddressZero,
-          ONE_DAY_IN_SECS
+          ONE_DAY_IN_SECS,
+          false
         );
       });
 
@@ -1378,7 +1871,8 @@ describe('OpenPeerEscrow', () => {
             erc20.address,
             '1000',
             partner.address,
-            ONE_DAY_IN_SECS
+            ONE_DAY_IN_SECS,
+            false
           );
         });
 
@@ -1398,6 +1892,33 @@ describe('OpenPeerEscrow', () => {
           );
         });
       });
+
+      describe('With instant escrow', () => {
+        beforeEach(async () => {
+          await escrow.deposit(erc20.address, '1003');
+          await escrow.createERC20Escrow(
+            ethers.utils.formatBytes32String('2'),
+            buyer.address,
+            erc20.address,
+            '1000',
+            constants.AddressZero,
+            ONE_DAY_IN_SECS,
+            true
+          );
+          expect(await escrow.balances(erc20.address)).to.equal('0');
+        });
+
+        it('Should return the balance', async () => {
+          await time.increaseTo((await time.latest()) + ONE_DAY_IN_SECS);
+          await escrow.sellerCancel(
+            ethers.utils.formatBytes32String('2'),
+            buyer.address,
+            erc20.address,
+            '1000'
+          );
+          expect(await escrow.balances(erc20.address)).to.equal('1003');
+        });
+      });
     });
   });
 
@@ -1410,6 +1931,7 @@ describe('OpenPeerEscrow', () => {
           '1000',
           constants.AddressZero,
           ONE_DAY_IN_SECS,
+          false,
           {
             value: '1003'
           }
@@ -1478,6 +2000,7 @@ describe('OpenPeerEscrow', () => {
         '1000',
         constants.AddressZero,
         ONE_DAY_IN_SECS,
+        false,
         { value: '1003' }
       );
     });
@@ -1741,7 +2264,8 @@ describe('OpenPeerEscrow', () => {
           erc20.address,
           '1000',
           constants.AddressZero,
-          ONE_DAY_IN_SECS
+          ONE_DAY_IN_SECS,
+          false
         );
         await expect(
           escrow.openDispute(orderID, buyer.address, erc20.address, '1000', {
@@ -1760,6 +2284,7 @@ describe('OpenPeerEscrow', () => {
         '1000',
         constants.AddressZero,
         ONE_DAY_IN_SECS,
+        false,
         { value: '1003' }
       );
       await escrow
@@ -2024,6 +2549,7 @@ describe('OpenPeerEscrow', () => {
               '1000',
               partner.address,
               ONE_DAY_IN_SECS,
+              false,
               { value: '1013' }
             );
             await escrow
@@ -2211,6 +2737,205 @@ describe('OpenPeerEscrow', () => {
             });
           });
         });
+
+        describe('With instant escrow', () => {
+          beforeEach(async () => {
+            await escrow.deposit(constants.AddressZero, '1003', { value: '1003' });
+            await escrow.createNativeEscrow(
+              ethers.utils.formatBytes32String('2'),
+              buyer.address,
+              '1000',
+              constants.AddressZero,
+              ONE_DAY_IN_SECS,
+              true
+            );
+            await escrow
+              .connect(buyer)
+              .markAsPaid(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                constants.AddressZero,
+                '1000'
+              );
+            expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+          });
+
+          describe('When only the seller paid', () => {
+            beforeEach(async () => {
+              await escrow.openDispute(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                constants.AddressZero,
+                '1000',
+                { value: DISPUTE_FEE }
+              );
+            });
+
+            describe('With the seller as winner', () => {
+              it('Should return the tokens to the escrow', async () => {
+                await expect(
+                  escrow
+                    .connect(arbitrator)
+                    .resolveDispute(
+                      ethers.utils.formatBytes32String('2'),
+                      buyer.address,
+                      constants.AddressZero,
+                      '1000',
+                      seller.address
+                    )
+                ).to.changeEtherBalances(
+                  [escrow, seller, buyer, feeRecipient],
+                  [DISPUTE_FEE.add(3).mul(-1), DISPUTE_FEE, 0, 3] // arbitration fee + escrow fee, the rest stays in the escrow
+                );
+                expect(await escrow.balances(constants.AddressZero)).to.equal('1000');
+              });
+            });
+
+            describe('With the buyer as winner', () => {
+              it('Should return the tokens to the buyer', async () => {
+                await expect(
+                  escrow
+                    .connect(arbitrator)
+                    .resolveDispute(
+                      ethers.utils.formatBytes32String('2'),
+                      buyer.address,
+                      constants.AddressZero,
+                      '1000',
+                      buyer.address
+                    )
+                ).to.changeEtherBalances(
+                  [escrow, seller, buyer, feeRecipient],
+                  [escrowBalance, 0, winnerBalance, 3]
+                );
+                expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+              });
+            });
+          });
+
+          describe('When only the buyer paid', () => {
+            beforeEach(async () => {
+              await escrow
+                .connect(buyer)
+                .openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+            });
+
+            describe('With the seller as winner', () => {
+              it('Should return the tokens to the seller', async () => {
+                await expect(
+                  escrow
+                    .connect(arbitrator)
+                    .resolveDispute(
+                      ethers.utils.formatBytes32String('2'),
+                      buyer.address,
+                      constants.AddressZero,
+                      '1000',
+                      seller.address
+                    )
+                ).to.changeEtherBalances(
+                  [escrow, seller, buyer, feeRecipient],
+                  [DISPUTE_FEE.add(3).mul(-1), DISPUTE_FEE, 0, 3]
+                );
+                expect(await escrow.balances(constants.AddressZero)).to.equal('1000');
+              });
+            });
+
+            describe('With the buyer as winner', () => {
+              it('Should return the tokens to the buyer', async () => {
+                await expect(
+                  escrow
+                    .connect(arbitrator)
+                    .resolveDispute(
+                      ethers.utils.formatBytes32String('2'),
+                      buyer.address,
+                      constants.AddressZero,
+                      '1000',
+                      buyer.address
+                    )
+                ).to.changeEtherBalances(
+                  [escrow, seller, buyer, feeRecipient],
+                  [escrowBalance, 0, winnerBalance, 3]
+                );
+                expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+              });
+            });
+          });
+
+          describe('When both parts paid', () => {
+            beforeEach(async () => {
+              await escrow.openDispute(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                constants.AddressZero,
+                '1000',
+                { value: DISPUTE_FEE }
+              );
+              await escrow
+                .connect(buyer)
+                .openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  constants.AddressZero,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+            });
+
+            describe('With the seller as winner', () => {
+              it('Should return the tokens to the seller', async () => {
+                await expect(
+                  escrow
+                    .connect(arbitrator)
+                    .resolveDispute(
+                      ethers.utils.formatBytes32String('2'),
+                      buyer.address,
+                      constants.AddressZero,
+                      '1000',
+                      seller.address
+                    )
+                ).to.changeEtherBalances(
+                  [escrow, seller, buyer, feeRecipient],
+                  [DISPUTE_FEE.mul(-2).add(-3), DISPUTE_FEE, 0, DISPUTE_FEE.add(3)]
+                );
+                expect(await escrow.balances(constants.AddressZero)).to.equal('1000');
+              });
+            });
+
+            describe('With the buyer as winner', () => {
+              it('Should return the tokens to the buyer', async () => {
+                await expect(
+                  escrow
+                    .connect(arbitrator)
+                    .resolveDispute(
+                      ethers.utils.formatBytes32String('2'),
+                      buyer.address,
+                      constants.AddressZero,
+                      '1000',
+                      buyer.address
+                    )
+                ).to.changeEtherBalances(
+                  [escrow, seller, buyer, feeRecipient],
+                  [
+                    escrowBalance.add(DISPUTE_FEE.mul(-1)), // seller dispute fee (1 MATIC)+ buyer dispute fee (1 MATIC) + escrowed funds (1003)
+                    0,
+                    winnerBalance,
+                    DISPUTE_FEE.add(BigNumber.from(3)) // arbitration fee + escrow fee
+                  ]
+                );
+                expect(await escrow.balances(constants.AddressZero)).to.equal('0');
+              });
+            });
+          });
+        });
       });
 
       describe('ERC20 token', () => {
@@ -2222,7 +2947,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '1000',
               constants.AddressZero,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             );
             await escrow
               .connect(buyer)
@@ -2481,6 +3207,319 @@ describe('OpenPeerEscrow', () => {
               });
             });
           });
+
+          describe('With instant escrow', () => {
+            beforeEach(async () => {
+              await escrow.deposit(erc20.address, '1003');
+              await escrow.createERC20Escrow(
+                ethers.utils.formatBytes32String('2'),
+                buyer.address,
+                erc20.address,
+                '1000',
+                constants.AddressZero,
+                ONE_DAY_IN_SECS,
+                true
+              );
+              await escrow
+                .connect(buyer)
+                .markAsPaid(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000'
+                );
+              expect(await escrow.balances(erc20.address)).to.equal('0');
+            });
+
+            describe('When only the seller paid', () => {
+              beforeEach(async () => {
+                await escrow.openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+              });
+
+              describe('With the seller as winner', () => {
+                it('Should return the tokens to the seller', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        seller.address
+                      )
+                  ).to.changeTokenBalances(
+                    erc20,
+                    [escrow, seller, buyer, feeRecipient],
+                    [-3, 0, 0, 3]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                });
+
+                it('Should return the fee to the seller', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        seller.address
+                      )
+                  ).to.changeEtherBalances(
+                    [escrow, seller, buyer, feeRecipient],
+                    [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                });
+              });
+
+              describe('With the buyer as winner', () => {
+                it('Should return the tokens to the buyer', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        buyer.address
+                      )
+                  ).to.changeTokenBalances(
+                    erc20,
+                    [escrow, seller, buyer, feeRecipient],
+                    [-1003, 0, 1000, 3]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('0');
+                });
+
+                it('Should return the fee to the buyer', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        buyer.address
+                      )
+                  ).to.changeEtherBalances(
+                    [escrow, seller, buyer, feeRecipient],
+                    [DISPUTE_FEE.mul(-1), 0, DISPUTE_FEE, 0]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('0');
+                });
+              });
+            });
+
+            describe('When only the buyer paid', () => {
+              beforeEach(async () => {
+                await escrow
+                  .connect(buyer)
+                  .openDispute(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    erc20.address,
+                    '1000',
+                    {
+                      value: DISPUTE_FEE
+                    }
+                  );
+              });
+
+              describe('With the seller as winner', () => {
+                it('Should return the tokens to the seller', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        seller.address
+                      )
+                  ).to.changeTokenBalances(
+                    erc20,
+                    [escrow, seller, buyer, feeRecipient, partner],
+                    [-3, 0, 0, 3, 0]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                });
+
+                it('Should return the fee to the seller', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        seller.address
+                      )
+                  ).to.changeEtherBalances(
+                    [escrow, seller, buyer, feeRecipient],
+                    [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                });
+              });
+
+              describe('With the buyer as winner', () => {
+                it('Should return the tokens to the buyer', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        buyer.address
+                      )
+                  ).to.changeTokenBalances(
+                    erc20,
+                    [escrow, seller, buyer, feeRecipient],
+                    [-1003, 0, 1000, 3]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('0');
+                });
+
+                it('Should return the fee to the buyer', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        buyer.address
+                      )
+                  ).to.changeEtherBalances(
+                    [escrow, seller, buyer, feeRecipient],
+                    [DISPUTE_FEE.mul(-1), 0, DISPUTE_FEE, 0]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('0');
+                });
+              });
+            });
+
+            describe('When both parts paid', () => {
+              beforeEach(async () => {
+                await escrow.openDispute(
+                  ethers.utils.formatBytes32String('2'),
+                  buyer.address,
+                  erc20.address,
+                  '1000',
+                  {
+                    value: DISPUTE_FEE
+                  }
+                );
+                await escrow
+                  .connect(buyer)
+                  .openDispute(
+                    ethers.utils.formatBytes32String('2'),
+                    buyer.address,
+                    erc20.address,
+                    '1000',
+                    {
+                      value: DISPUTE_FEE
+                    }
+                  );
+              });
+
+              describe('With the seller as winner', () => {
+                it('Should return the tokens to the seller', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        seller.address
+                      )
+                  ).to.changeTokenBalances(
+                    erc20,
+                    [escrow, seller, buyer, feeRecipient],
+                    [-3, 0, 0, 3]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                });
+
+                it('Should return the fee to the seller', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        seller.address
+                      )
+                  ).to.changeEtherBalances(
+                    [escrow, seller, buyer, feeRecipient],
+                    [DISPUTE_FEE.mul(-2), DISPUTE_FEE, 0, DISPUTE_FEE]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                });
+              });
+
+              describe('With the buyer as winner', () => {
+                it('Should return the tokens to the buyer', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        buyer.address
+                      )
+                  ).to.changeTokenBalances(
+                    erc20,
+                    [escrow, seller, buyer, feeRecipient],
+                    [-1003, 0, 1000, 3]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('0');
+                });
+
+                it('Should return the fee to the buyer', async () => {
+                  await expect(
+                    escrow
+                      .connect(arbitrator)
+                      .resolveDispute(
+                        ethers.utils.formatBytes32String('2'),
+                        buyer.address,
+                        erc20.address,
+                        '1000',
+                        buyer.address
+                      )
+                  ).to.changeEtherBalances(
+                    [escrow, seller, buyer, feeRecipient],
+                    [DISPUTE_FEE.mul(-2), 0, DISPUTE_FEE, DISPUTE_FEE]
+                  );
+                  expect(await escrow.balances(erc20.address)).to.equal('0');
+                });
+              });
+            });
+          });
         });
 
         describe('With partner fee', () => {
@@ -2492,7 +3531,8 @@ describe('OpenPeerEscrow', () => {
               erc20.address,
               '1000',
               partner.address,
-              ONE_DAY_IN_SECS
+              ONE_DAY_IN_SECS,
+              false
             );
             await escrow
               .connect(buyer)
