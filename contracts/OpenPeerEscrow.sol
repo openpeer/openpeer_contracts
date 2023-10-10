@@ -426,7 +426,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             _winner,
             _winner == _buyer ? _amount : _amount + _escrow.fee,
             _fee,
-            _winner == _buyer ? _escrow.partner : payable(address(0)),
+            _escrow.partner,
             _openPeerFee,
             true,
             _escrow.automaticEscrow
