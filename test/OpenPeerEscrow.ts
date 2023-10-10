@@ -3836,6 +3836,58 @@ describe('OpenPeerEscrow', () => {
     });
   });
 
+  describe('Withdraw', () => {
+    describe('Native token', () => {
+      beforeEach(async () => {
+        await escrow.deposit(constants.AddressZero, '1000', {
+          value: '1000'
+        });
+      });
+
+      it('Should revert with wrong amount', async () => {
+        await expect(
+          escrow.withdrawBalance(constants.AddressZero, '1001')
+        ).to.be.revertedWith('Not enough tokens in escrow');
+      });
+
+      it('Should update the balances', async () => {
+        await escrow.withdrawBalance(constants.AddressZero, '599');
+        expect(await escrow.balances(constants.AddressZero)).to.equal(401);
+      });
+
+      it('Should transfer the tokens', async () => {
+        await expect(
+          escrow.withdrawBalance(constants.AddressZero, '599')
+        ).to.changeEtherBalances([escrow, seller], [-599, 599]);
+      });
+    });
+
+    describe('ERC20 token', () => {
+      beforeEach(async () => {
+        await escrow.deposit(erc20.address, '1000');
+      });
+
+      it('Should revert with wrong amount', async () => {
+        await expect(escrow.withdrawBalance(erc20.address, '1001')).to.be.revertedWith(
+          'Not enough tokens in escrow'
+        );
+      });
+
+      it('Should update the balances', async () => {
+        await escrow.withdrawBalance(erc20.address, '599');
+        expect(await escrow.balances(erc20.address)).to.equal(401);
+      });
+
+      it('Should transfer the tokens', async () => {
+        await expect(escrow.withdrawBalance(erc20.address, '599')).to.changeTokenBalances(
+          erc20,
+          [escrow, seller],
+          [-599, 599]
+        );
+      });
+    });
+  });
+
   it('Should return a version recipient', async () => {
     expect(await escrow.versionRecipient()).to.equal('1.0');
   });

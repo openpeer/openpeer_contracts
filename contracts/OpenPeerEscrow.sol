@@ -511,7 +511,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         } else {
             if (_token == address(0)) {
                 (bool sent, ) = _to.call{value: _amount}("");
-                require(sent, "Failed to send MATIC");
+                require(sent, "Failed to send tokens");
             } else {
                 require(
                     IERC20(_token).transfer(_to, _amount),
@@ -579,5 +579,11 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     function deposit(address _token, uint256 _amount) external payable {
         validateAndPullTokens(_token, _amount, false);
         balances[_token] += _amount;
+    }
+
+    function withdrawBalance(address _token, uint256 _amount) external {
+        require(balances[_token] >= _amount, "Not enough tokens in escrow");
+        balances[_token] -= _amount;
+        withdraw(_token, seller, _amount, false);
     }
 }
