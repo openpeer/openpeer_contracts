@@ -20,7 +20,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     uint256 public feeBps;
     uint256 public immutable disputeFee = 1 ether;
     mapping(bytes32 => mapping(address => bool)) public disputePayments;
-    mapping(address => uint256) public balances;
+    mapping(address => uint256) public balancesInUse;
 
     /**********************
     +   Events            +
@@ -182,8 +182,8 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         bool _automaticEscrow
     ) internal {
         if (_automaticEscrow) {
-            require(balances[_token] >= _amount, "Not enough tokens in escrow");
-            balances[_token] -= _amount;
+            require(balances(_token) >= _amount, "Not enough tokens in escrow");
+            balancesInUse[_token] += _amount;
         } else {
             if (_token == address(0)) {
                 require(msg.value == _amount, "Incorrect amount sent");
@@ -511,7 +511,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         bool _updateBalancesOnly
     ) private {
         if (_updateBalancesOnly && _to == seller) {
-            balances[_token] += _amount;
+            balancesInUse[_token] -= _amount;
         } else {
             if (_token == address(0)) {
                 (bool sent, ) = _to.call{value: _amount}("");
@@ -576,18 +576,22 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     ***********************************/
 
     // accept ETH deposits
-    receive() external payable {
-        balances[address(0)] += msg.value;
-    }
-
-    function deposit(address _token, uint256 _amount) external payable {
-        validateAndPullTokens(_token, _amount, false);
-        balances[_token] += _amount;
-    }
+    receive() external payable {}
 
     function withdrawBalance(address _token, uint256 _amount) external {
-        require(balances[_token] >= _amount, "Not enough tokens in escrow");
-        balances[_token] -= _amount;
+        require(balances(_token) >= _amount, "Not enough tokens in escrow");
+
         withdraw(_token, seller, _amount, false);
+    }
+
+    function balances(address _token) internal view returns (uint256) {
+        uint256 balance;
+        if (_token == address(0)) {
+            balance = address(this).balance;
+        } else {
+            balance = IERC20(_token).balanceOf(address(this));
+        }
+
+        return balance - balancesInUse[_token];
     }
 }
