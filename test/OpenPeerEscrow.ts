@@ -2402,7 +2402,7 @@ describe('OpenPeerEscrow', () => {
                   )
               ).to.changeEtherBalances(
                 [escrow, seller, buyer, feeRecipient],
-                [escrowBalance, winnerBalance, 0, 3]
+                [escrowBalance, winnerBalance.add(3), 0, 0]
               );
             });
           });
@@ -2450,7 +2450,7 @@ describe('OpenPeerEscrow', () => {
                   )
               ).to.changeEtherBalances(
                 [escrow, seller, buyer, feeRecipient],
-                [escrowBalance, winnerBalance, 0, 3]
+                [escrowBalance, winnerBalance.add(3), 0, 0]
               );
             });
           });
@@ -2507,9 +2507,9 @@ describe('OpenPeerEscrow', () => {
                 [escrow, seller, buyer, feeRecipient],
                 [
                   escrowBalance.add(DISPUTE_FEE.mul(-1)), // seller dispute fee (1 MATIC)+ buyer dispute fee (1 MATIC) + escrowed funds (1003)
-                  winnerBalance,
+                  winnerBalance.add(3),
                   0,
-                  DISPUTE_FEE.add(BigNumber.from(3)) // arbitration fee + escrow fee
+                  DISPUTE_FEE
                 ]
               );
             });
@@ -2587,7 +2587,7 @@ describe('OpenPeerEscrow', () => {
                     )
                 ).to.changeEtherBalances(
                   [escrow, seller, buyer, feeRecipient, partner],
-                  [escrowBalance.sub(BigNumber.from(10)), winnerBalance, 0, 3, 10] // balance has 10 wei more because of the partner fee
+                  [escrowBalance.sub(BigNumber.from(10)), winnerBalance.add(13), 0, 0, 0] // balance has 10 wei more because of the partner fee
                 );
               });
             });
@@ -2641,7 +2641,7 @@ describe('OpenPeerEscrow', () => {
                     )
                 ).to.changeEtherBalances(
                   [escrow, seller, buyer, feeRecipient, partner],
-                  [escrowBalance.sub(BigNumber.from(10)), winnerBalance, 0, 3, 10] // balance has 10 wei more because of the partner fee
+                  [escrowBalance.sub(BigNumber.from(10)), winnerBalance.add(13), 0, 0, 0] // balance has 10 wei more because of the partner fee
                 );
               });
             });
@@ -2704,9 +2704,9 @@ describe('OpenPeerEscrow', () => {
                   [escrow, seller, buyer, feeRecipient],
                   [
                     escrowBalance.add(DISPUTE_FEE.mul(-1)).sub(BigNumber.from(10)), // seller dispute fee (1 MATIC)+ buyer dispute fee (1 MATIC) + escrowed funds (1003)
-                    winnerBalance,
+                    winnerBalance.add(13),
                     0,
-                    DISPUTE_FEE.add(BigNumber.from(3)) // arbitration fee + escrow fee
+                    DISPUTE_FEE
                   ]
                 );
               });
@@ -2785,9 +2785,9 @@ describe('OpenPeerEscrow', () => {
                     )
                 ).to.changeEtherBalances(
                   [escrow, seller, buyer, feeRecipient],
-                  [DISPUTE_FEE.add(3).mul(-1), DISPUTE_FEE, 0, 3] // arbitration fee + escrow fee, the rest stays in the escrow
+                  [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0] // dispute fee return the seller
                 );
-                expect(await escrow.balances(constants.AddressZero)).to.equal('1000');
+                expect(await escrow.balances(constants.AddressZero)).to.equal('1003');
               });
             });
 
@@ -2841,9 +2841,9 @@ describe('OpenPeerEscrow', () => {
                     )
                 ).to.changeEtherBalances(
                   [escrow, seller, buyer, feeRecipient],
-                  [DISPUTE_FEE.add(3).mul(-1), DISPUTE_FEE, 0, 3]
+                  [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
                 );
-                expect(await escrow.balances(constants.AddressZero)).to.equal('1000');
+                expect(await escrow.balances(constants.AddressZero)).to.equal('1003');
               });
             });
 
@@ -2904,9 +2904,9 @@ describe('OpenPeerEscrow', () => {
                     )
                 ).to.changeEtherBalances(
                   [escrow, seller, buyer, feeRecipient],
-                  [DISPUTE_FEE.mul(-2).add(-3), DISPUTE_FEE, 0, DISPUTE_FEE.add(3)]
+                  [DISPUTE_FEE.mul(-2), DISPUTE_FEE, 0, DISPUTE_FEE]
                 );
-                expect(await escrow.balances(constants.AddressZero)).to.equal('1000');
+                expect(await escrow.balances(constants.AddressZero)).to.equal('1003');
               });
             });
 
@@ -2977,7 +2977,7 @@ describe('OpenPeerEscrow', () => {
                 ).to.changeTokenBalances(
                   erc20,
                   [escrow, seller, buyer, feeRecipient],
-                  [-1003, 1000, 0, 3]
+                  [-1003, 1003, 0, 0]
                 );
               });
 
@@ -3061,7 +3061,7 @@ describe('OpenPeerEscrow', () => {
                 ).to.changeTokenBalances(
                   erc20,
                   [escrow, seller, buyer, feeRecipient, partner],
-                  [-1003, 1000, 0, 3, 0]
+                  [-1003, 1003, 0, 0, 0]
                 );
               });
 
@@ -3148,7 +3148,7 @@ describe('OpenPeerEscrow', () => {
                 ).to.changeTokenBalances(
                   erc20,
                   [escrow, seller, buyer, feeRecipient],
-                  [-1003, 1000, 0, 3]
+                  [-1003, 1003, 0, 0]
                 );
               });
 
@@ -3259,9 +3259,9 @@ describe('OpenPeerEscrow', () => {
                   ).to.changeTokenBalances(
                     erc20,
                     [escrow, seller, buyer, feeRecipient],
-                    [-3, 0, 0, 3]
+                    [0, 0, 0, 0]
                   );
-                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                  expect(await escrow.balances(erc20.address)).to.equal('1003');
                 });
 
                 it('Should return the fee to the seller', async () => {
@@ -3279,7 +3279,7 @@ describe('OpenPeerEscrow', () => {
                     [escrow, seller, buyer, feeRecipient],
                     [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
                   );
-                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                  expect(await escrow.balances(erc20.address)).to.equal('1003');
                 });
               });
 
@@ -3353,9 +3353,9 @@ describe('OpenPeerEscrow', () => {
                   ).to.changeTokenBalances(
                     erc20,
                     [escrow, seller, buyer, feeRecipient, partner],
-                    [-3, 0, 0, 3, 0]
+                    [0, 0, 0, 0, 0]
                   );
-                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                  expect(await escrow.balances(erc20.address)).to.equal('1003');
                 });
 
                 it('Should return the fee to the seller', async () => {
@@ -3373,7 +3373,7 @@ describe('OpenPeerEscrow', () => {
                     [escrow, seller, buyer, feeRecipient],
                     [DISPUTE_FEE.mul(-1), DISPUTE_FEE, 0, 0]
                   );
-                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                  expect(await escrow.balances(erc20.address)).to.equal('1003');
                 });
               });
 
@@ -3442,7 +3442,7 @@ describe('OpenPeerEscrow', () => {
               });
 
               describe('With the seller as winner', () => {
-                it('Should return the tokens to the seller', async () => {
+                it('Should keep the tokens in the seller', async () => {
                   await expect(
                     escrow
                       .connect(arbitrator)
@@ -3456,9 +3456,9 @@ describe('OpenPeerEscrow', () => {
                   ).to.changeTokenBalances(
                     erc20,
                     [escrow, seller, buyer, feeRecipient],
-                    [-3, 0, 0, 3]
+                    [0, 0, 0, 0]
                   );
-                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                  expect(await escrow.balances(erc20.address)).to.equal('1003');
                 });
 
                 it('Should return the fee to the seller', async () => {
@@ -3476,7 +3476,7 @@ describe('OpenPeerEscrow', () => {
                     [escrow, seller, buyer, feeRecipient],
                     [DISPUTE_FEE.mul(-2), DISPUTE_FEE, 0, DISPUTE_FEE]
                   );
-                  expect(await escrow.balances(erc20.address)).to.equal('1000');
+                  expect(await escrow.balances(erc20.address)).to.equal('1003');
                 });
               });
 
@@ -3561,7 +3561,7 @@ describe('OpenPeerEscrow', () => {
                 ).to.changeTokenBalances(
                   erc20,
                   [escrow, seller, buyer, feeRecipient, partner],
-                  [-1013, 1000, 0, 3, 10]
+                  [-1013, 1013, 0, 0, 0]
                 );
               });
 
@@ -3645,7 +3645,7 @@ describe('OpenPeerEscrow', () => {
                 ).to.changeTokenBalances(
                   erc20,
                   [escrow, seller, buyer, feeRecipient, partner],
-                  [-1013, 1000, 0, 3, 10]
+                  [-1013, 1013, 0, 0, 0]
                 );
               });
 
@@ -3732,7 +3732,7 @@ describe('OpenPeerEscrow', () => {
                 ).to.changeTokenBalances(
                   erc20,
                   [escrow, seller, buyer, feeRecipient, partner],
-                  [-1013, 1000, 0, 3, 10]
+                  [-1013, 1013, 0, 0, 0]
                 );
               });
 

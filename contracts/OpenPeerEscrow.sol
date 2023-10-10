@@ -415,15 +415,19 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         );
 
         emit DisputeResolved(_orderHash, _winner);
+
+        uint256 _fee = _winner == _buyer ? _escrow.fee : 0; // no fees if the trade is not done
+        uint256 _openPeerFee = _winner == _buyer ? _escrow.openPeerFee : 0;
+
         transferEscrowAndFees(
             _orderHash,
             _buyer,
             _token,
             _winner,
-            _amount,
-            _escrow.fee,
-            _escrow.partner,
-            _escrow.openPeerFee,
+            _winner == _buyer ? _amount : _amount + _escrow.fee,
+            _fee,
+            _winner == _buyer ? _escrow.partner : payable(address(0)),
+            _openPeerFee,
             true,
             _escrow.automaticEscrow
         );
