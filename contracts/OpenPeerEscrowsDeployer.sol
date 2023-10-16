@@ -18,6 +18,7 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     address public arbitrator;
     address payable public feeRecipient;
     uint256 private fee;
+    uint256 public disputeFee;
 
     bool public stopped;
 
@@ -37,17 +38,20 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @param _fee OP fee (bps) ex: 30 == 0.3%
     /// @param _trustedForwarder Forwarder address
     /// @param _feeDiscountNFT NFT contract for fee discounts
+    /// @param _disputeFee Dispute fee
     constructor(
         address _arbitrator,
         address payable _feeRecipient,
         uint256 _fee,
         address _trustedForwarder,
-        address _feeDiscountNFT
+        address _feeDiscountNFT,
+        uint256 _disputeFee
     ) ERC2771Context(_trustedForwarder) {
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
         fee = _fee;
         feeDiscountNFT = _feeDiscountNFT;
+        disputeFee = _disputeFee;
         implementation = address(new OpenPeerEscrow(_trustedForwarder));
     }
 
@@ -72,7 +76,8 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
             arbitrator,
             feeRecipient,
             _trustedForwarder,
-            feeDiscountNFT
+            feeDiscountNFT,
+            disputeFee
         );
         sellerContracts[_msgSender()] = deployment;
         emit ContractCreated(_msgSender(), deployment);

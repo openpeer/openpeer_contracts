@@ -55,7 +55,8 @@ describe('OpenPeerEscrow', () => {
       feeRecipient.address,
       FEE,
       TRUSTED_FORWARDER,
-      NFT_CONTRACT
+      NFT_CONTRACT,
+      parseUnits('1', 'ether')
     );
 
     await contract.deployed();

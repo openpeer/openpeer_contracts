@@ -6,6 +6,7 @@ import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
 import { NFT, OpenPeerEscrowsDeployer } from '../typechain-types';
+import { parseUnits } from 'ethers/lib/utils';
 
 describe('OpenPeerEscrowsDeployer', () => {
   let deployer: OpenPeerEscrowsDeployer;
@@ -40,7 +41,8 @@ describe('OpenPeerEscrowsDeployer', () => {
       feeRecipient.address,
       fee,
       '0x69015912AA33720b842dCD6aC059Ed623F28d9f7',
-      constants.AddressZero
+      constants.AddressZero,
+      parseUnits('1', 'ether')
     );
 
     await contract.deployed();
@@ -54,6 +56,7 @@ describe('OpenPeerEscrowsDeployer', () => {
       expect(await deployer.arbitrator()).to.be.equal(arbitrator.address);
       expect(await deployer.feeRecipient()).to.be.equal(feeRecipient.address);
       expect(await deployer.sellerFee(constants.AddressZero)).to.be.equal(fee);
+      expect(await deployer.disputeFee()).to.be.equal(parseUnits('1', 'ether'));
     });
 
     it('Should initialize the implementation', async () => {
@@ -69,7 +72,8 @@ describe('OpenPeerEscrowsDeployer', () => {
             arbitrator.address,
             feeRecipient.address,
             constants.AddressZero,
-            '0xf0511f123164602042ab2bCF02111fA5D3Fe97CD'
+            '0xf0511f123164602042ab2bCF02111fA5D3Fe97CD',
+            parseUnits('1', 'ether')
           )
       ).to.be.revertedWith('Initializable: contract is already initialized');
     });

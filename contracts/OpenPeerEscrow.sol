@@ -18,7 +18,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     address payable public feeRecipient;
     address public feeDiscountNFT;
     uint256 public feeBps;
-    uint256 public immutable disputeFee = 1 ether;
+    uint256 public disputeFee;
     mapping(bytes32 => mapping(address => bool)) public disputePayments;
     mapping(address => uint256) public balancesInUse;
 
@@ -57,13 +57,16 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
     /// @param trustedForwarder Forwarder address
+    /// @param _feeDiscountNFT NFT contract for fee discounts
+    /// @param _disputeFee Fee to open a dispute
     function initialize(
         address payable _seller,
         uint256 _feeBps,
         address _arbitrator,
         address payable _feeRecipient,
         address trustedForwarder,
-        address _feeDiscountNFT
+        address _feeDiscountNFT,
+        uint256 _disputeFee
     ) external virtual initializer {
         require(_seller != address(0), "Invalid seller");
         require(_feeRecipient != address(0), "Invalid fee recipient");
@@ -76,6 +79,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         feeRecipient = _feeRecipient;
         _trustedForwarder = trustedForwarder;
         feeDiscountNFT = _feeDiscountNFT;
+        disputeFee = _disputeFee;
         deployer = _msgSender();
     }
 
