@@ -588,7 +588,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         withdraw(_token, seller, _amount, false);
     }
 
-    function balances(address _token) internal view returns (uint256) {
+    function balances(address _token) public view returns (uint256) {
         uint256 balance;
         if (_token == address(0)) {
             balance = address(this).balance;
