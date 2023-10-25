@@ -3853,6 +3853,7 @@ describe('OpenPeerEscrow', () => {
       it('Should update the balances', async () => {
         await escrow.withdrawBalance(constants.AddressZero, '599');
         expect(await escrow.balancesInUse(constants.AddressZero)).to.equal(0);
+        expect(await escrow.balances(constants.AddressZero)).to.equal(401);
       });
 
       it('Should transfer the tokens', async () => {
@@ -3876,12 +3877,51 @@ describe('OpenPeerEscrow', () => {
       it('Should update the balances', async () => {
         await escrow.withdrawBalance(erc20.address, '599');
         expect(await escrow.balancesInUse(erc20.address)).to.equal(0);
+        expect(await escrow.balances(erc20.address)).to.equal(401);
       });
 
       it('Should transfer the tokens', async () => {
         await expect(escrow.withdrawBalance(erc20.address, '599')).to.changeTokenBalances(
           erc20,
           [escrow, seller],
+          [-599, 599]
+        );
+      });
+    });
+  });
+
+  describe('Deposit', () => {
+    describe('Native token', () => {
+      it('Should revert with wrong amount', async () => {
+        await expect(
+          escrow.deposit(constants.AddressZero, '1001', { value: '1000' })
+        ).to.be.revertedWith('Incorrect amount sent');
+      });
+
+      it('Should update the balances', async () => {
+        await escrow.deposit(constants.AddressZero, '599', { value: '599' });
+        expect(await escrow.balancesInUse(constants.AddressZero)).to.equal(0);
+        expect(await escrow.balances(constants.AddressZero)).to.equal(599);
+      });
+
+      it('Should transfer the tokens', async () => {
+        await expect(
+          escrow.deposit(constants.AddressZero, '599', { value: '599' })
+        ).to.changeEtherBalances([seller, escrow], [-599, 599]);
+      });
+    });
+
+    describe('ERC20 token', () => {
+      it('Should update the balances', async () => {
+        await escrow.deposit(erc20.address, '599');
+        expect(await escrow.balancesInUse(erc20.address)).to.equal(0);
+        expect(await escrow.balances(erc20.address)).to.equal(599);
+      });
+
+      it('Should transfer the tokens', async () => {
+        await expect(escrow.deposit(erc20.address, '599')).to.changeTokenBalances(
+          erc20,
+          [seller, escrow],
           [-599, 599]
         );
       });

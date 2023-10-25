@@ -582,6 +582,10 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     // accept ETH deposits
     receive() external payable {}
 
+    function deposit(address _token, uint256 _amount) external payable {
+        validateAndPullTokens(_token, _amount, false);
+    }
+
     function withdrawBalance(address _token, uint256 _amount) external {
         require(balances(_token) >= _amount, "Not enough tokens in escrow");
 
