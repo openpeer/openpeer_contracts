@@ -463,15 +463,33 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         delete disputePayments[_orderHash][_buyer];
 
         // transfers the amount to the seller | buyer | this contract
-        withdraw(_token, _to, _amount, _automaticEscrow);
+        withdraw(
+            _token,
+            _to,
+            _amount,
+            _automaticEscrow, // will update the internal balancesInUse if it was an automatic escrow
+            _to != seller || !_automaticEscrow // transfer if not seller or if its the seller but the escrow is not automatic
+        );
         if (_openPeerFee > 0) {
             // transfers the OP fee to the fee recipient
-            withdraw(_token, feeRecipient, _openPeerFee, false);
+            withdraw(
+                _token,
+                feeRecipient,
+                _openPeerFee,
+                _automaticEscrow,
+                true
+            );
         }
 
         if (_fee - _openPeerFee > 0) {
             // transfers the OP fee to the fee recipient
-            withdraw(_token, _partner, _fee - _openPeerFee, false);
+            withdraw(
+                _token,
+                _partner,
+                _fee - _openPeerFee,
+                _automaticEscrow,
+                true
+            );
         }
 
         if (_disputeResolution) {
@@ -507,16 +525,19 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _token Address of the token to withdraw fees in to
     /// @param _to Address to withdraw fees in to
     /// @param _amount Amount to withdraw
-    /// @param _updateBalancesOnly Update internal balances
+    /// @param _updateBalancesInUse Update internal balances in use
     function withdraw(
         address _token,
         address payable _to,
         uint256 _amount,
-        bool _updateBalancesOnly
+        bool _updateBalancesInUse,
+        bool _transferTokens
     ) private {
-        if (_updateBalancesOnly && _to == seller) {
+        if (_updateBalancesInUse) {
             balancesInUse[_token] -= _amount;
-        } else {
+        }
+
+        if (_transferTokens) {
             if (_token == address(0)) {
                 (bool sent, ) = _to.call{value: _amount}("");
                 require(sent, "Failed to send tokens");
@@ -589,7 +610,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     function withdrawBalance(address _token, uint256 _amount) external {
         require(balances(_token) >= _amount, "Not enough tokens in escrow");
 
-        withdraw(_token, seller, _amount, false);
+        withdraw(_token, seller, _amount, false, true);
     }
 
     function balances(address _token) public view returns (uint256) {
@@ -599,7 +620,6 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         } else {
             balance = IERC20(_token).balanceOf(address(this));
         }
-
         return balance - balancesInUse[_token];
     }
 }
