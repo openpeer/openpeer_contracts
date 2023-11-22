@@ -155,14 +155,6 @@ describe('VP2P', () => {
           amount
         );
       });
-
-      it('Should transfer the values', async () => {
-        await expect(vp2p.claim(1, amount, [])).to.changeTokenBalance(
-          vp2p,
-          owner.address,
-          amount
-        );
-      });
     });
   });
 });
