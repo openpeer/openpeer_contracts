@@ -477,24 +477,12 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         );
         if (_openPeerFee > 0) {
             // transfers the OP fee to the fee recipient
-            withdraw(
-                _token,
-                feeRecipient,
-                _openPeerFee,
-                true,
-                true
-            );
+            withdraw(_token, feeRecipient, _openPeerFee, true, true);
         }
 
         if (_fee - _openPeerFee > 0) {
             // transfers the OP fee to the fee recipient
-            withdraw(
-                _token,
-                _partner,
-                _fee - _openPeerFee,
-                true,
-                true
-            );
+            withdraw(_token, _partner, _fee - _openPeerFee, true, true);
         }
 
         if (_disputeResolution) {
@@ -617,7 +605,10 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         validateAndPullTokens(_token, _amount, false, true);
     }
 
-    function withdrawBalance(address _token, uint256 _amount) external onlySeller () {
+    function withdrawBalance(
+        address _token,
+        uint256 _amount
+    ) external onlySeller {
         require(balances(_token) >= _amount, "Not enough tokens in escrow");
 
         withdraw(_token, seller, _amount, false, true);
