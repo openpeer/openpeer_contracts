@@ -4,13 +4,12 @@ pragma solidity ^0.8.17;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {IERC721} from "@openzeppelin/contracts/interfaces/IERC721.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {OpenPeerEscrow} from "./OpenPeerEscrow.sol";
-import {ERC2771Context} from "../libs/ERC2771Context.sol";
-import {Ownable} from "../libs/Ownable.sol";
 import {IBlast} from "../interfaces/IBlast.sol";
 import {IERC20Rebasing} from "../interfaces/IERC20Rebasing.sol";
 
-contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
+contract OpenPeerEscrowsDeployer is Ownable {
     mapping(address => address) public sellerContracts;
     mapping(address => uint256) public partnerFeeBps;
 
@@ -48,23 +47,21 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
     /// @param _fee OP fee (bps) ex: 30 == 0.3%
-    /// @param _trustedForwarder Forwarder address
     /// @param _feeDiscountNFT NFT contract for fee discounts
     /// @param _disputeFee Dispute fee
     constructor(
         address _arbitrator,
         address payable _feeRecipient,
         uint256 _fee,
-        address _trustedForwarder,
         address _feeDiscountNFT,
         uint256 _disputeFee
-    ) ERC2771Context(_trustedForwarder) {
+    ) {
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
         fee = _fee;
         feeDiscountNFT = _feeDiscountNFT;
         disputeFee = _disputeFee;
-        implementation = address(new OpenPeerEscrow(_trustedForwarder));
+        implementation = address(new OpenPeerEscrow());
     }
 
     /***********************
@@ -87,7 +84,6 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
             fee,
             arbitrator,
             feeRecipient,
-            _trustedForwarder,
             feeDiscountNFT,
             disputeFee
         );
@@ -121,13 +117,6 @@ contract OpenPeerEscrowsDeployer is ERC2771Context, Ownable {
         require(_fee <= 100);
 
         fee = _fee;
-    }
-
-    /// @notice Updates the forwarder
-    /// @param trustedForwarder biconomy forwarder
-    function setTrustedForwarder(address trustedForwarder) external onlyOwner {
-        require(trustedForwarder != address(0), "Invalid trust forwarder");
-        _trustedForwarder = trustedForwarder;
     }
 
     /// @notice Updates the implementation

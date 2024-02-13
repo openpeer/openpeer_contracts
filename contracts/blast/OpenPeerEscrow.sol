@@ -5,12 +5,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IERC721} from "@openzeppelin/contracts/interfaces/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC2771Context} from "../libs/ERC2771Context.sol";
 import {IOpenPeerDeployer} from "../interfaces/IOpenPeerDeployer.sol";
 import {IBlast} from "../interfaces/IBlast.sol";
 import {IERC20Rebasing, YieldMode} from "../interfaces/IERC20Rebasing.sol";
 
-contract OpenPeerEscrow is ERC2771Context, Initializable {
+contract OpenPeerEscrow is Initializable {
     using SafeERC20 for IERC20;
     mapping(bytes32 => Escrow) public escrows;
 
@@ -59,8 +58,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         bool automaticEscrow;
     }
 
-    /// @param _trustedForwarder Forwarder address
-    constructor(address _trustedForwarder) ERC2771Context(_trustedForwarder) {
+    constructor() {
         _disableInitializers();
     }
 
@@ -68,7 +66,6 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
     /// @param _feeBps OP fee (bps) ex: 30 == 0.3%
     /// @param _arbitrator Address of the arbitrator (currently OP staff)
     /// @param _feeRecipient Address to receive the fees
-    /// @param trustedForwarder Forwarder address
     /// @param _feeDiscountNFT NFT contract for fee discounts
     /// @param _disputeFee Fee to open a dispute
     function initialize(
@@ -76,23 +73,20 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         uint256 _feeBps,
         address _arbitrator,
         address payable _feeRecipient,
-        address trustedForwarder,
         address _feeDiscountNFT,
         uint256 _disputeFee
     ) external virtual initializer {
         require(_seller != address(0), "Invalid seller");
         require(_feeRecipient != address(0), "Invalid fee recipient");
         require(_arbitrator != address(0), "Invalid arbitrator");
-        require(trustedForwarder != address(0), "Invalid trust forwarder");
 
         seller = _seller;
         feeBps = _feeBps;
         arbitrator = _arbitrator;
         feeRecipient = _feeRecipient;
-        _trustedForwarder = trustedForwarder;
         feeDiscountNFT = _feeDiscountNFT;
         disputeFee = _disputeFee;
-        deployer = _msgSender();
+        deployer = msg.sender;
 
         BLAST.configureClaimableYield();
         USDB.configure(YieldMode.CLAIMABLE);
@@ -104,12 +98,12 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
 
     // Modifiers
     modifier onlySeller() {
-        require(_msgSender() == seller, "Must be seller");
+        require(msg.sender == seller, "Must be seller");
         _;
     }
 
     modifier onlyArbitrator() {
-        require(_msgSender() == arbitrator, "Must be arbitrator");
+        require(msg.sender == arbitrator, "Must be arbitrator");
         _;
     }
 
@@ -213,7 +207,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             } else {
                 uint256 balanceBefore = IERC20(_token).balanceOf(address(this));
                 IERC20(_token).safeTransferFrom(
-                    _msgSender(),
+                    msg.sender,
                     address(this),
                     _amount
                 );
@@ -238,7 +232,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address _token,
         uint256 _amount
     ) external returns (bool) {
-        require(_msgSender() == _buyer, "Must be buyer");
+        require(msg.sender == _buyer, "Must be buyer");
 
         Escrow memory _escrow;
         bytes32 _orderHash;
@@ -302,7 +296,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         address _token,
         uint256 _amount
     ) external returns (bool) {
-        require(_msgSender() == _buyer, "Must be buyer");
+        require(msg.sender == _buyer, "Must be buyer");
 
         Escrow memory _escrow;
         bytes32 _orderHash;
@@ -383,7 +377,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
         uint256 _amount
     ) external payable returns (bool) {
         require(
-            _msgSender() == seller || _msgSender() == _buyer,
+            msg.sender == seller || msg.sender == _buyer,
             "Must be seller or buyer"
         );
         Escrow memory _escrow;
@@ -404,14 +398,14 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
             "To open a dispute, you must pay 1 MATIC"
         );
         require(
-            !disputePayments[_orderHash][_msgSender()],
+            !disputePayments[_orderHash][msg.sender],
             "This address already paid for the dispute"
         );
 
         balancesInUse[address(0)] += disputeFee;
         escrows[_orderHash].dispute = true;
-        disputePayments[_orderHash][_msgSender()] = true;
-        emit DisputeOpened(_orderHash, _msgSender());
+        disputePayments[_orderHash][msg.sender] = true;
+        emit DisputeOpened(_orderHash, msg.sender);
         return true;
     }
 
@@ -600,7 +594,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
 
         if (
             feeDiscountNFT != address(0) &&
-            discountNFT.balanceOf(_msgSender()) > 0
+            discountNFT.balanceOf(msg.sender) > 0
         ) {
             return 0;
         }
