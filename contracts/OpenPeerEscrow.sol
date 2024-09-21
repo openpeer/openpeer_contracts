@@ -540,10 +540,7 @@ contract OpenPeerEscrow is ERC2771Context, Initializable {
                 (bool sent, ) = _to.call{value: _amount}("");
                 require(sent, "Failed to send tokens");
             } else {
-                require(
-                    IERC20(_token).transfer(_to, _amount),
-                    "Failed to send tokens"
-                );
+                IERC20(_token).safeTransfer(_to, _amount);
             }
         }
     }
